@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="КЛЕЩ">
 <meta name="description" content="Выживи в шерстяных угодьях: собирай кровь, выбирай мутации и побеждай боссов. Игра с сенсорным управлением.">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>КЛЕЩ · Blood Gains — Sound & Gear 4.3</title>
+<title>КЛЕЩ · Blood Gains — Sound & Gear 4.3.1</title>
 <style>
   :root{
     --bg-fur:#1c110d;
@@ -214,6 +214,7 @@ html,body{width:var(--app-width,100vw);height:var(--app-height,100dvh)}
  #shield-btn,#dash-btn,.field-skill{width:48px;height:48px;border-radius:13px}#dash-btn,.field-skill{bottom:calc(12px + env(safe-area-inset-bottom))}#shield-btn,#acid-skill{bottom:calc(68px + env(safe-area-inset-bottom))}.field-skill{right:calc(72px + env(safe-area-inset-right))}#shield-btn,#dash-btn{right:calc(12px + env(safe-area-inset-right))}
 }
 
+#code-entry-screen{z-index:160;padding-bottom:calc(18px + env(safe-area-inset-bottom))}#code-entry-screen .panel{width:min(410px,100%);text-align:left}#code-entry-screen .title{font-size:25px}.code-label{display:block;font-size:12px;margin:12px 0 8px}#entry-code{display:block;width:100%;box-sizing:border-box;padding:13px;border:1px solid #aa916b;border-radius:9px;font:16px var(--mono);background:#fff8e8;color:#33271b}#entry-code:focus-visible{outline:3px solid #5dc4ae;outline-offset:2px}#entry-code-error{min-height:18px;font-size:12px;color:#973c4b}#code-entry-screen .btn{width:100%}#menu-screen .entry-code-btn{font-size:11px;box-shadow:none;background:transparent;border:0;padding:8px 0;color:#726753}
 </style>
 </head>
 <body>
@@ -246,7 +247,7 @@ html,body{width:var(--app-width,100vw);height:var(--app-height,100dvh)}
     <button class="btn secondary" id="btn-shop" data-i18n="btnShop">Visit the Dog Shop</button>
     <button class="btn secondary" id="btn-equip" data-i18n="equipTitle">🎒 Equipment</button>
     <button class="btn secondary" id="btn-howto" data-i18n="btnHowto">How to Play</button>
-    <button class="btn secondary" id="btn-cheats" data-i18n="btnCheats">🧪 Testing / Cheats</button>
+    <button class="btn secondary hidden" id="btn-cheats" data-i18n="btnCheats">🧪 Testing / Cheats</button>
   </div>
 </div>
 
@@ -363,7 +364,7 @@ html,body{width:var(--app-width,100vw);height:var(--app-height,100dvh)}
   <button class="nav-btn" id="nav-shop"><span class="nav-icon">🐕</span><span data-i18n="navShop">Shop</span></button>
   <button class="nav-btn" id="nav-equip"><span class="nav-icon">🎒</span><span data-i18n="navEquip">Gear</span></button>
   <button class="nav-btn" id="nav-howto"><span class="nav-icon">📖</span><span data-i18n="navHowto">Guide</span></button>
-  <button class="nav-btn" id="nav-cheats"><span class="nav-icon">🧪</span><span data-i18n="navCheats">Test</span></button>
+  <button class="nav-btn hidden" id="nav-cheats"><span class="nav-icon">🧪</span><span data-i18n="navCheats">Test</span></button>
   <div class="lang-pill">
     <button id="lang-en">EN</button><button id="lang-ru">RU</button>
   </div>
@@ -381,7 +382,7 @@ html,body{width:var(--app-width,100vw);height:var(--app-height,100dvh)}
    localStorage (synchronous) or a proper mobile storage plugin. Everything
    else in the game is untouched by that change.
    ========================================================================= */
-const GAME_VERSION='4.3';
+const GAME_VERSION='4.3.1';
 const ECONOMY_VERSION=4,MAX_RUN_LEVEL=50;
 const SAVE_KEY = 'tick_blood_gains_save_v1';
 const DEFAULT_SAVE = { bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],audio:{enabled:true,volume:.35},
@@ -805,6 +806,7 @@ function setState(s){
   if(s==='equipment') renderEquipment();
   applyI18n();
   syncWildUI();
+  syncCheatAccess();
 }
 
 function refreshBankLabels(){
@@ -2104,6 +2106,7 @@ function renderShop(){
 
 function renderEquipment(){renderLoadouts();}
 function openCheats(){
+  if(!cheatsUnlocked)return false;
   cheatsOpen = true;
   cheatsScreen.classList.remove('hidden');
   document.getElementById('nav-cheats').classList.add('active');
@@ -2114,25 +2117,26 @@ function closeCheats(){
   cheatsScreen.classList.add('hidden');
   document.getElementById('nav-cheats').classList.remove('active');
 }
-function cheatGiveBank(amt){ save.bloodBank+=amt; persistSave(); refreshBankLabels(); buildCheatsUI(); }
-function cheatGiveRunBlood(amt){if(!player)return;bloodThisRun+=amt;gainXP(0);}
-function cheatForceLevelUp(){ if(!player || state!=='playing') return; closeCheats(); player.level++; checkTickEvolution(); openLevelUp(); }
-function cheatSpawnBoss(){ if(!player || state!=='playing') return; closeCheats(); if(!bossActive) spawnBoss(); }
-function cheatClearEnemies(){ enemies=[]; bossActive=null; }
-function cheatAddTime(sec){ if(!player) return; elapsed+=sec; }
-function cheatJumpStage(idx){
+function cheatGiveBank(amt){if(!allowCheatAction())return; save.bloodBank+=amt; persistSave(); refreshBankLabels(); buildCheatsUI(); }
+function cheatGiveRunBlood(amt){if(!allowCheatAction())return;if(!player)return;bloodThisRun+=amt;gainXP(0);}
+function cheatForceLevelUp(){if(!allowCheatAction())return; if(!player || state!=='playing') return; closeCheats(); player.level++; checkTickEvolution(); openLevelUp(); }
+function cheatSpawnBoss(){if(!allowCheatAction())return; if(!player || state!=='playing') return; closeCheats(); if(!bossActive) spawnBoss(); }
+function cheatClearEnemies(){if(!allowCheatAction())return; enemies=[]; bossActive=null; }
+function cheatAddTime(sec){if(!allowCheatAction())return; if(!player) return; elapsed+=sec; }
+function cheatJumpStage(idx){if(!allowCheatAction())return;
   if(!player) return;
   currentStageIdx = idx; announcedStageIdx = -1;
   bossEncounters = idx;
   nextBossAt = elapsed + 20;
 }
-function cheatToggle(key){ CHEATS[key]=!CHEATS[key]; buildCheatsUI(); }
-function cheatResetSave(){ const keepLang=save.lang; save = JSON.parse(JSON.stringify(DEFAULT_SAVE)); save.lang=keepLang; persistSave(); refreshBankLabels(); buildCheatsUI(); }
-function cheatMaxMeta(){ META_UPGRADES.forEach(u=>{ save.upg[u.id]=u.cap||20; }); persistSave(); buildCheatsUI(); }
-function cheatGiveSlime(amt){ save.slimeBank+=amt; persistSave(); refreshBankLabels(); buildCheatsUI(); }
-function cheatUnlockEquipment(){ EQUIPMENT_DEFS.forEach(e=>{ save.equip[e.id]=true; }); persistSave(); buildCheatsUI(); }
+function cheatToggle(key){if(!allowCheatAction())return; CHEATS[key]=!CHEATS[key]; buildCheatsUI(); }
+function cheatResetSave(){if(!allowCheatAction())return; const keepLang=save.lang; save = JSON.parse(JSON.stringify(DEFAULT_SAVE)); save.lang=keepLang; persistSave(); refreshBankLabels(); buildCheatsUI(); }
+function cheatMaxMeta(){if(!allowCheatAction())return; META_UPGRADES.forEach(u=>{ save.upg[u.id]=u.cap||20; }); persistSave(); buildCheatsUI(); }
+function cheatGiveSlime(amt){if(!allowCheatAction())return; save.slimeBank+=amt; persistSave(); refreshBankLabels(); buildCheatsUI(); }
+function cheatUnlockEquipment(){if(!allowCheatAction())return; EQUIPMENT_DEFS.forEach(e=>{ save.equip[e.id]=true; }); persistSave(); buildCheatsUI(); }
 
 function buildCheatsUI(){
+  if(!cheatsUnlocked)return;
   applyI18n();
   const toggles = [
     ['godMode','tGodMode'], ['oneShot','tOneShot'], ['turbo','tTurbo'], ['noSpawn','tNoSpawn']
@@ -2515,7 +2519,7 @@ function syncWildUI(){
   document.getElementById('dash-btn').setAttribute('aria-label',tr('Рывок: 4 секунды перезарядки','Dash: 4 second cooldown'));
   const guide=document.getElementById('howto-body');
   if(guide)guide.innerHTML=t('howtoBody')+'<br><br>'+tr('<b>Новые возможности:</b> WASD/стрелки — движение, Shift — рывок с неуязвимостью (перезарядка 4 сек), пробел — щит, Esc/P — пауза. На телефоне: джойстик и две кнопки справа. Светлый круг внутри клеща — зона попадания, лапки урон не получают.<br><br><b>Исследование:</b> 18 тайников: оранжевый — кровь и опыт, зелёный — 35% здоровья, фиолетовый — сбор всех выпавших капель и опыт. Тайники появляются на мини-карте вблизи клеща. Золотое кольцо — элитный враг: 3× здоровья, 3× крови, 2× опыта и лечебная капля (+18% HP).<br><br><b>Мутации:</b> 2 переброса за забег. В паузе видна текущая сборка. Прогресс сохраняется в браузере, незаконченный забег — каждые 5 секунд и при паузе. Экспортируй сохранение для переноса между устройствами.','<b>New controls:</b> WASD/arrows to move, Shift to dash with invulnerability (4s cooldown), Space for shield, Esc/P to pause. On touch: joystick and two buttons on the right. The light core circle is the hitbox; legs are decorative.<br><br><b>Explore:</b> 18 caches: orange gives blood and XP, green restores 35% HP, purple attracts all dropped blood and grants XP. Nearby caches appear on the minimap. A gold ring marks an elite: 3× HP, 3× blood, 2× XP and a healing drop (+18% HP).<br><br><b>Mutations:</b> 2 rerolls per run. View your build while paused. Browser saves persist progress; unfinished runs save every 5 seconds and on pause. Export saves to move between devices.');
-  guide.innerHTML+='<br><br>'+tr('<b>Сложность:</b> выбирается перед обычным забегом и режимом роя. Средний — базовый баланс текущей версии. Валюта, цены и постоянные улучшения общие для всех сложностей. Уже начатый забег сохраняет выбранную сложность; старые сохранения считаются средними.','<b>Difficulty:</b> choose before an expedition or swarm run. Normal uses the Sound & Gear 4.3 baseline. Currency, prices and permanent upgrades are shared across difficulties. Saved runs keep their difficulty; older saves use Normal.');
+  guide.innerHTML+='<br><br>'+tr('<b>Сложность:</b> выбирается перед обычным забегом и режимом роя. Средний — базовый баланс текущей версии. Валюта, цены и постоянные улучшения общие для всех сложностей. Уже начатый забег сохраняет выбранную сложность; старые сохранения считаются средними.','<b>Difficulty:</b> choose before an expedition or swarm run. Normal uses the Sound & Gear 4.3.1 baseline. Currency, prices and permanent upgrades are shared across difficulties. Saved runs keep their difficulty; older saves use Normal.');
   guide.innerHTML+='<br><br>'+tr('<b>Обновление 3.0:</b> кровавый импульс заряжается кровью и бьёт у ближайшей цели в пределах дальности шипов. Вязкий шип замедляет на 28% на 0.35с, затем у цели 2с иммунитета; на боссах замедление 12%. Две активные эволюции выбираются в атласе. До трёх предметов экипировки действуют из выбранного набора; его смена применяется сразу. Постройки на карте — события: шпиль, арена, лагерь и лавка. Личный рейтинг работает офлайн, общий — по кнопке публикации в итогах.','<b>Update 3.0:</b> blood pulse charges from blood and hits at the nearest target within spike range. Sticky spikes slow 28% for 0.35s, followed by 2s immunity; bosses slow 12%. Select two active evolutions in the atlas. Up to three equipped items apply immediately when you change the selected preset. Buildings mark events: spire, arena, camp and stall. Personal records work offline; publish to the community leaderboard from run results.');
   guide.innerHTML+='<br><br>'+tr('<b>Баланс 4.1:</b> редкий «Второй желудок» имеет 3 уровня: +20/40/60% крови. Все мутации и постоянные улучшения ограничены, уровень забега — максимум 50. Кровь за досрочное завершение и смерть сохраняется на 20%, слизь — полностью. После финального босса — 100% крови. В паузе и после босса есть кнопка завершения с расчётом выплаты. Статическое поле (E) и кислотное кольцо (Q) покупаются за слизь в экипировке или за кровь на рынке до конца забега.','<b>Balance 4.1:</b> rare Second Stomach has 3 ranks: +20/40/60% Blood. Mutations, permanent upgrades and run levels (50) are capped. Early exit or death banks 20% Blood and all Slime; after the final boss, 100% Blood. Review the payout from pause or between stages. Buy Static Field (E) and Acid Ring (Q) as permanent Slime gear or temporary run-market skills.');
   guide.innerHTML+='<br><br>'+tr('<b>Дополнительный урон:</b> импульс заряжается только собранными каплями, имеет перезарядку 4с и не усиливается от уровня или суммы крови. По боссам пассивные взрывы наносят 25% урона, вместе не более 3% их макс. HP за секунду. Импульс — не более 2% HP за срабатывание и не может добить босса. Разрывные шипы не наследуют криты и бонусы добивания. Вампиризм ограничен 2% макс. HP/сек. Карточки улучшений показывают точные значения до и после покупки.','<b>Supplemental damage:</b> pulses charge only from picked-up drops, have a 4s cooldown and do not scale with level or stored Blood. Passive explosions deal 25% damage to bosses, with a shared cap of 3% Max HP per second. Each pulse deals at most 2% Max HP and cannot finish a boss. Splash does not inherit crits or execution bonuses. Lifesteal caps at 2% Max HP/sec. Upgrade cards show exact before/after values.');
@@ -2641,7 +2645,7 @@ function initializeWildUI(){
   <g fill="#f5d18b" stroke-width="2"><circle cx="-25" cy="-50" r="7"/><circle cx="25" cy="-50" r="7"/></g><g fill="#fff0bd" stroke="none"><circle cx="-27" cy="-52" r="2"/><circle cx="23" cy="-52" r="2"/></g>
   </g><g fill="#cbd6b0" font-family="Georgia,serif" font-size="12" opacity=".7"><text x="29" y="284">Ixodes prosperus</text><text x="340" y="36">fig. 02</text></g></svg>
   <div class="hero-caption" id="wild-caption"></div></div>`;
-  const menu=document.querySelector('#menu-screen .panel');menu.insertAdjacentHTML('afterbegin',hero+'<div class="edition">BLOOD GAINS · WILD FUR · 4.3</div>');
+  const menu=document.querySelector('#menu-screen .panel');menu.insertAdjacentHTML('afterbegin',hero+'<div class="edition">BLOOD GAINS · WILD FUR · 4.3.1</div>');
   document.getElementById('btn-start').insertAdjacentHTML('beforebegin','<button class="btn hidden" id="btn-resume"></button>');
   menu.insertAdjacentHTML('beforeend','<div class="storage-tools"><button class="text-btn" id="export-save"></button><button class="text-btn" id="import-save"></button></div><div id="storage-status"></div><input type="file" id="save-file" accept="application/json,.json" hidden>');
   document.getElementById('hud').insertAdjacentHTML('beforeend','<button id="pause-btn" aria-label="Пауза">Ⅱ</button>');
@@ -2672,11 +2676,12 @@ function initializeWildUI(){
     const btn=document.getElementById('lang-'+lang),old=btn.onclick;btn.onclick=()=>{old();syncWildUI();if(state==='paused')renderBuild();};
   }
   window.addEventListener('keydown',e=>{
+    if(codeEntryOpen){if(e.code==='Escape'){e.preventDefault();closeCodeEntry();}return;}
     if(e.ctrlKey||e.metaKey||e.altKey||e.target?.tagName==='INPUT')return;
     const actions=['KeyE','KeyQ','KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','Space','ShiftLeft','ShiftRight','Escape','KeyP'];
     if(actions.includes(e.code)&&(state==='playing'||state==='paused'))e.preventDefault();
     if(e.code==='Escape'&&state==='difficulty'){setState('menu');return;}
-    if(e.code==='F2'&&!e.repeat){e.preventDefault();if(cheatsOpen)closeCheats();else openCheats();return;}
+    if(e.code==='F2'&&!e.repeat&&cheatsUnlocked){e.preventDefault();if(cheatsOpen)closeCheats();else openCheats();return;}
     if(e.code==='Escape'&&cheatsOpen){closeCheats();return;}
     if((e.code==='Escape'||e.code==='KeyP')&&!e.repeat){if(state==='paused')resumeRun();else pauseRun();return;}
     if(state==='levelup'&&['Digit1','Digit2','Digit3'].includes(e.code)&&!e.repeat){document.querySelectorAll('#levelup-choices .choice-card')[Number(e.code.at(-1))-1]?.click();return;}
@@ -3455,8 +3460,46 @@ function initializePolishUI(){
  window.addEventListener('pointerdown',()=>gameAudio.unlock(),{capture:true,passive:true});window.addEventListener('keydown',()=>gameAudio.unlock(),{capture:true});syncAudioControls();
 }
 
+/* Secret testing entry: session-only unlock; never trust imported flags. */
+let cheatsUnlocked=false,codeEntryOpen=false,codeReturnFocus=null;
+function syncCheatAccess(){
+ for(const id of ['btn-cheats','nav-cheats'])document.getElementById(id).classList.toggle('hidden',!cheatsUnlocked);
+}
+function openCodeEntry(){
+ if(!['menu','paused'].includes(state)||cheatsOpen)return;
+ codeReturnFocus=document.activeElement;codeEntryOpen=true;keys.clear();endJoystick();
+ const input=document.getElementById('entry-code');input.value='';document.getElementById('entry-code-error').textContent='';document.getElementById('code-entry-screen').classList.remove('hidden');input.focus();
+}
+function closeCodeEntry(){
+ codeEntryOpen=false;document.getElementById('entry-code').value='';document.getElementById('code-entry-screen').classList.add('hidden');codeReturnFocus?.focus?.();
+}
+function redeemEntryCode(value){
+ if(typeof value!=='string'||value.trim()!=='NoCowLevel')return false;
+ cheatsUnlocked=true;syncCheatAccess();closeCodeEntry();openCheats();return true;
+}
+function allowCheatAction(){
+ if(!cheatsUnlocked)return false;
+ if(player&&!runEnded){rankedRun=false;checkpoint();}
+ return true;
+}
+function initializeSecretEntry(){
+ Object.assign(UI.ru,{btnEntryCode:'Ввести код',entryTitle:'Ввести код',entryLabel:'Код',entryApply:'Применить',entryCancel:'Отмена'});
+ Object.assign(UI.en,{btnEntryCode:'Enter code',entryTitle:'Enter code',entryLabel:'Code',entryApply:'Apply',entryCancel:'Cancel'});
+ for(const [anchor,id]of [['btn-howto','menu-entry-code'],['pause-resume','pause-entry-code']])document.getElementById(anchor).insertAdjacentHTML('beforebegin','<button class="btn secondary entry-code-btn" id="'+id+'" data-i18n="btnEntryCode"></button>');
+ document.body.insertAdjacentHTML('beforeend','<div class="overlay hidden" id="code-entry-screen"><section class="panel" role="dialog" aria-modal="true" aria-labelledby="entry-code-title"><h1 class="title" id="entry-code-title" data-i18n="entryTitle"></h1><form id="entry-code-form"><label class="code-label" for="entry-code" data-i18n="entryLabel"></label><input id="entry-code" name="code" type="password" maxlength="64" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="entry-code-error"><p id="entry-code-error" role="status" aria-live="polite"></p><button class="btn" type="submit" data-i18n="entryApply"></button><button class="btn secondary" type="button" id="entry-code-cancel" data-i18n="entryCancel"></button></form></section></div>');
+ for(const id of ['menu-entry-code','pause-entry-code'])document.getElementById(id).onclick=openCodeEntry;
+ document.getElementById('entry-code-cancel').onclick=closeCodeEntry;
+ document.getElementById('entry-code-form').addEventListener('submit',e=>{e.preventDefault();if(!redeemEntryCode(document.getElementById('entry-code').value)){document.getElementById('entry-code-error').textContent=tr('Код не подошёл.','Code not recognized.');document.getElementById('entry-code').focus();}});
+ document.getElementById('entry-code').addEventListener('input',()=>{document.getElementById('entry-code-error').textContent='';});
+ document.getElementById('code-entry-screen').addEventListener('keydown',e=>{
+  if(e.key!=='Tab')return;const input=document.getElementById('entry-code'),cancel=document.getElementById('entry-code-cancel');
+  if(e.shiftKey&&document.activeElement===input){e.preventDefault();cancel.focus();}else if(!e.shiftKey&&document.activeElement===cancel){e.preventDefault();input.focus();}
+ });
+ syncCheatAccess();
+}
+
 /* ========================================================================= BOOT */
-initializeWildUI();initializePolishUI();runtimeReady=true;
+initializeWildUI();initializePolishUI();initializeSecretEntry();runtimeReady=true;
 loadSave().then(()=>{
   setState('menu');
   syncWildUI();
