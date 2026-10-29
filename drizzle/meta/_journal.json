@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1793279039995,
+      "tag": "0000_scores",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793280292384,
+      "tag": "0001_economy_season",
+      "breakpoints": true
+    }
+  ]
+}

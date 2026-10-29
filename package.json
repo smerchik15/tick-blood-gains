@@ -1,0 +1,10 @@
+{
+  "name": "tick-blood-gains",
+  "version": "4.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-game.mjs",
+    "test": "node tests/balance.cjs && node tests/leaderboard.mjs"
+  }
+}
