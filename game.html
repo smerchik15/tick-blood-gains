@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="КЛЕЩ">
 <meta name="description" content="Выживи в шерстяных угодьях: собирай кровь, выбирай мутации и побеждай боссов. Игра с сенсорным управлением.">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>КЛЕЩ · Blood Gains — Wild Hunt 4.8-dev</title>
+<title>КЛЕЩ · Blood Gains — Gambino Lab 4.9-test</title>
 <style>
   :root{
     --bg-fur:#1c110d;
@@ -384,9 +384,9 @@ html,body{position:fixed;inset:0;overscroll-behavior:none}#game-canvas{touch-act
    localStorage (synchronous) or a proper mobile storage plugin. Everything
    else in the game is untouched by that change.
    ========================================================================= */
-const GAME_VERSION='4.8-dev';
+const GAME_VERSION='4.9-test';
 const ECONOMY_VERSION=4,MAX_RUN_LEVEL=50;
-const SAVE_KEY = 'tick_blood_gains_save_v1';
+const SAVE_KEY = 'tick_blood_gains_lab49_save_v1';
 const DEFAULT_SAVE = { bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,monthly:null,audio:{enabled:true,volume:.35},
   upg:{vitality:0,fangs:0,swiftness:0,appetite:0,scent:0,resilience:0,extraLife:0,bloodPressure:0},
   equip:{magnetCollar:false, chitinPlate:false, vampiric:false, flamethrower:false, zapper:false, rocket:false, drone:false,staticField:false,acidField:false,chickenCannon:false}
@@ -673,7 +673,7 @@ function difficulty(){return DIFFICULTIES[runDifficulty];}
 function difficultyName(id=runDifficulty){return L(DIFFICULTIES[Object.hasOwn(DIFFICULTIES,id)?id:'normal'].name);}
 const WORLD={w:3600,h:2600};
 const camera={x:0,y:0};
-const RUN_KEY='tick_blood_gains_run_v2';
+const RUN_KEY='tick_blood_gains_lab49_run_v2';
 let storageOK=true, storageNotice='', resumeData=null, saveClock=0;
 let pausedFrom='playing', dashTimer=0, dashCooldown=0, dashX=1, dashY=0;
 let caches=[], discoveries=0, elitesKilled=0, eliteClock=25, pendingLevels=0, mutationContext=null;
@@ -709,7 +709,7 @@ const JOY_RADIUS = 56;
 function newPlayer(profile=save){
   const equipped=id=>profile.equip[id]&&profile.loadouts[profile.activeLoadout].includes(id);
   return {
-    survivalMode:runDifficulty==='vmode',dashCharges:runDifficulty==='vmode'?3:1,dashRechargeLeft:0,weapon:'spikes',statusEffects:{},vGuardReady:false,vGuardLevels:[],auraClock:0,baseUpgrades:{...profile.upg},bargains:0,chickenShots:0,hasChickenCannon:!!equipped('chickenCannon'),equippedGear:profile.loadouts[profile.activeLoadout].slice(),evolutions:[],shotScale:1,splashRadius:64,splashMult:.30,execution:0,armor:0,lifeOnKill:0,lucky:0,evoTimer:0,
+    lab:{spins:0,purchases:0,nest:false,guard:0,damageUntil:0,speedUntil:0,receipt:""},survivalMode:runDifficulty==='vmode',dashCharges:runDifficulty==='vmode'?3:1,dashRechargeLeft:0,weapon:'spikes',statusEffects:{},vGuardReady:false,vGuardLevels:[],auraClock:0,baseUpgrades:{...profile.upg},bargains:0,chickenShots:0,hasChickenCannon:!!equipped('chickenCannon'),equippedGear:profile.loadouts[profile.activeLoadout].slice(),evolutions:[],shotScale:1,splashRadius:64,splashMult:.30,execution:0,armor:0,lifeOnKill:0,lucky:0,evoTimer:0,
     hasStaticField:!!equipped('staticField'),hasAcidField:!!equipped('acidField'),staticCooldown:0,acidCooldown:0,
     x:0,y:0, radius:16,
     maxHp: 32 + (profile.upg.vitality||0)*5,
@@ -1032,7 +1032,7 @@ function fireSpit(){
     playerProjectiles.push({
       x:player.droneX, y:player.droneY,
       vx:ddx/dd*player.spitSpeed, vy:ddy/dd*player.spitSpeed,
-      radius:5, dmg:dmg*.45,travelLeft:player.spitRange+player.droneRadius,life:(player.spitRange+player.droneRadius)/player.spitSpeed, slow:false,
+      radius:5, dmg:dmg*.3*gearPower(player),travelLeft:player.spitRange+player.droneRadius,life:(player.spitRange+player.droneRadius)/player.spitSpeed, slow:false,
       specialShot:player.pierceCount>0||player.ricochetCount>0,canCleave:player.pierceCount===0&&player.ricochetCount===0,pierceLeft:0,bouncesLeft:0,hitIds:[],fromDrone:true,damageType:weaponDef().type
     });
   }
@@ -1095,6 +1095,7 @@ function damagePlayer(amount, cause,attack={}){
   if(CHEATS.godMode || runEnded || dashTimer>0 || state!=='playing') return;
   if(player.invuln>0||!Number.isFinite(amount)||amount<=0) return;
   if(player.shieldActiveTimer>0)return 0;
+   if(player.lab?.guard){player.lab.guard=0;player.invuln=.8;toast(tr('Разовая защита сработала','Single-hit protection used'));return 0;}
   const type=Object.hasOwn(ELEMENTS,attack.type)?attack.type:inferIncoming(cause),delivery=Object.hasOwn(DELIVERIES,attack.delivery)?attack.delivery:'contact';
   if(runDifficulty==='vmode'&&player.vGuardReady){player.vGuardReady=false;player.invuln=.8;gameAudio.play('shield');addFloatText(player.x,player.y-40,tr('ЗАЩИТА ПОГЛОТИЛА УДАР','PROTECTION ABSORBED A HIT'),'#a9dced',15);checkpoint();syncCombatUI();return 0;}
   const protection=incomingMultiplier(type,delivery);const dmg=runDifficulty==='vmode'?player.hp:Math.max(delivery==='dot'?.01:.25,type==='physical'?amount*(player.dmgReduction||1)-player.armor:amount*(1-protection.resist));
@@ -1215,7 +1216,7 @@ function showUpgradeChoices(titleText, subtitleText, returnState, presetIds){
       if(EVOLUTIONS.some(e=>evolutionReady(e)&&!evo(e.id))&&player.evolutions.length<2)toast(tr('Доступна эволюция — открой атлас в паузе','Evolution ready — open the atlas from pause'));
       flushLevels(); checkpoint();
     };
-    box.appendChild(div);
+    box.appendChild(div);if(player?.lab){const replace=document.createElement('button');replace.className='btn secondary small';replace.textContent=tr('Заменить эту мутацию · ','Replace this mutation · ')+labCost('replace')+' 🩸';replace.disabled=bloodThisRun<labCost('replace')||availableMutations().every(o=>choiceContext.picks.includes(o.id));replace.onclick=()=>replaceLabMutation(u.id,choiceContext);box.appendChild(replace);}
   });
   document.getElementById('reroll-btn').disabled=rerolls<=0;
   document.getElementById('reroll-btn').textContent=tr('Переброс · осталось ','Reroll · left ')+rerolls;
@@ -1313,7 +1314,7 @@ function update(dt){
           while(ang>Math.PI) ang-=2*Math.PI;
           while(ang<-Math.PI) ang+=2*Math.PI;
           if(Math.abs(ang)<0.65){
-            dealDamage(e,2+player.spitDamage*.20,'flame'); e.flash=0.1;
+            dealDamage(e,(1+player.spitDamage*.16)*gearPower(player),'flame'); e.flash=0.1;
             
             if(e.hp<=0) killEnemy(e);
           }
@@ -1335,7 +1336,7 @@ function update(dt){
         if(d<bestD){ best=e; bestD=d; }
       }
       if(best){
-        dealDamage(best,4+player.spitDamage*.45,'zapper'); best.flash=0.15;
+        dealDamage(best,(2+player.spitDamage*.3)*gearPower(player),'zapper'); best.flash=0.15;
         
         sparks.push({x1:player.x,y1:player.y,x2:best.x,y2:best.y,life:0.15});
         if(best.hp<=0) killEnemy(best);
@@ -1348,7 +1349,7 @@ function update(dt){
     player.rocketTimer -= dt;
     const rocketTargets = enemies.filter(e=>!e.dead && !e.invulnerable&&Math.hypot(e.x-player.x,e.y-player.y)<=player.spitRange+e.radius);
     if(player.rocketTimer<=0 && rocketTargets.length>0){
-      player.rocketTimer = 3.2;
+      player.rocketTimer = 9;
       const target = rocketTargets[Math.floor(Math.random()*rocketTargets.length)];
       const dx=target.x-player.x, dy=target.y-player.y, d=Math.hypot(dx,dy)||1;
       playerRockets.push({x:player.x,y:player.y,vx:dx/d*160,vy:dy/d*160,life:(player.spitRange+70)/160,radius:8});
@@ -1363,7 +1364,7 @@ function update(dt){
       for(const e of enemies){
         if(e.dead || e.invulnerable) continue;
         if(Math.hypot(rk.x-e.x,rk.y-e.y)<70){
-          dealDamage(e,10+player.spitDamage*.35,'rocket'); e.flash=0.2;
+          dealDamage(e,(12+player.spitDamage*1.8)*gearPower(player),'rocket'); e.flash=0.2;
           
           if(e.hp<=0) killEnemy(e);
         }
@@ -2491,7 +2492,7 @@ function drawScreenHUD(){
   const mx=a=>x+8+a/WORLD.w*(size-16),my=a=>y+8+a/WORLD.h*(size-16);
   ctx.strokeStyle='#e1d6a33a';ctx.strokeRect(mx(camera.x),my(camera.y),W/WORLD.w*(size-16),H/WORLD.h*(size-16));
   for(const c of caches)if(c.seen&&!c.opened)drawMapGlyph(mx(c.x),my(c.y),'chest',['#efb47d','#ade3b8','#d0b4e1'][c.kind]);
-  for(const c of mapEvents)if(c.seen&&!c.done)drawMapGlyph(mx(c.x),my(c.y),['spire','arena','tent','stall'][c.type],c.type===0&&bloodThisRun<30?'#d7a17c':'#c6d696');
+  for(const c of mapEvents)if(c.seen&&!c.done)drawMapGlyph(mx(c.x),my(c.y),['spire','arena','tent','stall','casino'][c.type],c.type===0&&bloodThisRun<30?'#d7a17c':'#c6d696');
   for(const e of enemies)if(e.elite||e===bossActive){ctx.fillStyle=e===bossActive?'#f28089':'#f4d291';ctx.beginPath();ctx.arc(mx(e.x),my(e.y),e===bossActive?3:2,0,Math.PI*2);ctx.fill();}
   ctx.fillStyle='#edf1c0';ctx.beginPath();ctx.arc(mx(player.x),my(player.y),3,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#b6c1a7';ctx.font='9px "Segoe UI",sans-serif';ctx.textAlign='left';ctx.fillText(tr('ШЕРСТЯНЫЕ УГОДЬЯ','THE FUR WILDS'),x+8,y-8);
@@ -2557,7 +2558,7 @@ function snapshotRun(){
   if(!player||runEnded)return null;
   const activeState=['atlas','records','event','settlement'].includes(state)?majorReturnState:state==='paused'?pausedFrom:state;
   if(!['playing','levelup','stageclear','shop','equipment'].includes(activeState))return null;
-  return {v:2,extra:extraRunData(),economyVersion:4,balanceRevision:1,economy:{migration:economyMigration,fieldZones,lastBossReward,slimeLedger},major:{stats:runStats,events:mapEvents,challenge,runId,ranked:rankedRun},difficulty:runDifficulty,player,enemies,orbs,playerProjectiles,enemyProjectiles,playerRockets,hazards,elapsed,spawnTimer,killCount,bloodThisRun,slimeThisRun,usedExtraLife,isSwarmMode,currentStageIdx,announcedStageIdx,pendingStageIdx,bossEncounters,nextBossAt,enemyIdCounter,bossId:bossActive?.id??null,caches,discoveries,elitesKilled,eliteClock,pendingLevels,rerolls,dashCooldown,runSeed,activeState,shopReturnState,mutationContext};
+  return {v:2,extra:extraRunData(),economyVersion:4,balanceRevision:BALANCE_REVISION,economy:{migration:economyMigration,fieldZones,lastBossReward,slimeLedger},major:{stats:runStats,events:mapEvents,challenge,runId,ranked:rankedRun},difficulty:runDifficulty,player,enemies,orbs,playerProjectiles,enemyProjectiles,playerRockets,hazards,elapsed,spawnTimer,killCount,bloodThisRun,slimeThisRun,usedExtraLife,isSwarmMode,currentStageIdx,announcedStageIdx,pendingStageIdx,bossEncounters,nextBossAt,enemyIdCounter,bossId:bossActive?.id??null,caches,discoveries,elitesKilled,eliteClock,pendingLevels,rerolls,dashCooldown,runSeed,activeState,shopReturnState,mutationContext};
 }
 function checkpoint(){
   if(mirrorSession)return;
@@ -2779,16 +2780,16 @@ function normalizeLoadouts(raw,owned){
 function validRecord(r){return r&&[3,4].includes(r.v)&&typeof r.id==='string'&&r.id.length<80&&Object.hasOwn(SCORE_MULT,r.difficulty)&&['expedition','swarm'].includes(r.mode)&&Number.isFinite(r.score)&&r.score>=0&&Number.isFinite(r.elapsed)&&r.elapsed>=0&&Number.isFinite(r.kills)&&r.kills>=0&&Array.isArray(r.evolutions)&&r.evolutions.every(x=>typeof x==='string'&&x.length<60)&&r.stats&&typeof r.stats==='object'&&Object.keys(r.stats.kills||{}).every(k=>Object.hasOwn(KILL_VALUES,k));}
 function emptyStats(){return {kills:{},eliteKills:0,bosses:0,damage:{},damageTaken:0,hits:0,causes:{},spent:0,events:0,legacy:false};}
 function initMajorRun(){freshWorldState();dashClouds=[];dashPuffClock=0;slimeLedger={count:0,total:0,legacyCount:0,legacyTotal:0};lastBossReward=null;economyMigration=null;fieldZones=[];runStats=emptyStats();runId=globalThis.crypto?.randomUUID?.()||'run-'+Date.now()+'-'+Math.random().toString(36).slice(2);rankedRun=!Object.values(CHEATS).some(Boolean);blastRings=[];challenge=null;lastRecord=null;activeMapEvent=null;
- mapEvents=Array.from({length:8},(_,i)=>({id:i,x:250+hash(i+91+elapsed)*3100,y:220+hash(i+612)*2160,type:i%4,done:false,seen:false}));
+ rankedRun=false;mapEvents=Array.from({length:8},(_,i)=>({id:i,x:250+hash(i+91+elapsed)*3100,y:220+hash(i+612)*2160,type:i%4,done:false,seen:false}));mapEvents.push({id:49,x:WORLD.w-220,y:220,type:4,done:false,seen:true});
 }
 function migrateMajorRun(r){
  if(!r.major){r.major={stats:emptyStats(),events:[],challenge:null,runId:'legacy-'+Date.now(),ranked:false};r.major.stats.legacy=true;}
- const m=r.major;
+ const m=r.major;m.ranked=false;
  if(!m.stats||!m.stats.kills||!m.stats.damage||!m.stats.causes||!Array.isArray(m.events)||m.events.length>20||typeof m.runId!=='string'||m.runId.length>80)throw Error('Invalid run statistics');
  for(const [k,n]of Object.entries(m.stats.kills))if(!Object.hasOwn(KILL_VALUES,k)||!Number.isInteger(n)||n<0||n>1000000)throw Error('Invalid kill count');
  for(const k of ['eliteKills','bosses','damageTaken','hits','spent','events'])if(!Number.isFinite(m.stats[k])||m.stats[k]<0)throw Error('Invalid statistic');
  for(const n of Object.values(m.stats.damage))if(!Number.isFinite(n)||n<0)throw Error('Invalid damage statistic');
- for(const ev of m.events)if(!Number.isFinite(ev.x)||!Number.isFinite(ev.y)||![0,1,2,3].includes(ev.type)||!Number.isInteger(ev.id))throw Error('Invalid encounter');
+ for(const ev of m.events)if(!Number.isFinite(ev.x)||!Number.isFinite(ev.y)||![0,1,2,3,4].includes(ev.type)||!Number.isInteger(ev.id))throw Error('Invalid encounter');
  if(m.challenge&&(!Array.isArray(m.challenge.ids)||m.challenge.ids.length>20||m.challenge.ids.some(x=>!Number.isFinite(x))))throw Error('Invalid challenge');
 }
 function restoreMajorRun(m){dashClouds=[];dashPuffClock=0;runStats=m.stats;runId=m.runId;rankedRun=m.ranked===true&&!m.stats.legacy;mapEvents=m.events;challenge=m.challenge;blastRings=[];activeMapEvent=null;lastRecord=null;}
@@ -2800,6 +2801,7 @@ function scoreBreakdown(stats=runStats,time=elapsed,mode=runDifficulty){
 function recordKill(e){vKillRecovery();const key=e.type==='boss'?e.bossKey:e.type;runStats.kills[key]=(runStats.kills[key]||0)+1;if(e.elite)runStats.eliteKills++;if(e.type==='boss')runStats.bosses++;}
 function dealDamage(e,amount,source='evolution',hit={}){
  if(runEnded||e.dead||e.invulnerable||!Number.isFinite(amount)||amount<=0)return 0;
+ if(player.lab?.damageUntil>elapsed&&!['burn','poison'].includes(source))amount*=2;
  const typed=resolveEnemyTypedDamage(e,amount,source,hit);amount=boundedExplosionDamage(e,typed.amount,source);
  const actual=Math.min(Math.max(0,e.hp),amount);if(actual<=0)return 0;e.hp-=actual;e.flash=.14;e._source=source;
  runStats.damage[source]=(runStats.damage[source]||0)+actual;recordTypedDamage(actual,typed.type,typed.delivery);
@@ -2883,11 +2885,12 @@ function renderAtlas(){
  document.getElementById('atlas-subtitle').textContent=tr('Две активные эволюции. Менять можно бесплатно в этом окне. Открываются сочетаниями мутаций текущего забега.','Two active evolutions. Switch freely here. Unlock with this run’s mutation combinations.');
 }
 function openMapEvent(c){
+ if(c.type===4){openGambino();return;}
  if(c.done||state!=='playing')return;
  activeMapEvent=c;majorReturnState='playing';setState('event');const box=document.getElementById('event-options');box.innerHTML='';
  const defs=[
   {title:tr('Кровавый алтарь','Blood Shrine'),desc:tr('30 крови за выбор мутации. Если крови не хватает, вернись позже: алтарь останется на карте.','30 Blood for a mutation choice. Come back later if you cannot afford it; the shrine stays.'),cost:30,label:tr('30 крови → выбор мутации','30 Blood → mutation choice'),ok:()=>bloodThisRun>=30&&availableMutations().length>0,reason:bloodThisRun<30?tr('Не хватает крови: ','Need more Blood: ')+(30-bloodThisRun):tr('Доступных мутаций больше нет','No available mutations remain'),act:()=>{bloodThisRun-=30;runStats.spent+=30;showUpgradeChoices(t('bonusMutationTitle'),t('bonusMutationSubtitle'),'playing');}},
-  {title:tr('Гнездо паразитов','Parasite Nest'),desc:tr('Четыре элитных противника. Победи всех и получи 90 крови и 12 опыта.','Four elite enemies. Defeat all for 90 Blood and 12 XP.'),label:tr('Начать испытание','Start the challenge'),ok:()=>!challenge&&difficulty().cap-enemies.filter(e=>!e.dead).length>=4,reason:tr('Для испытания нужно место для четырёх врагов. Вернись позже.','The challenge needs space for four enemies. Return later.'),act:()=>{const ids=[];for(let i=0;i<4;i++){const before=enemies.length;spawnEnemy(i%2?'beetle':'flea',{x:c.x+Math.cos(i*Math.PI/2)*110,y:c.y+Math.sin(i*Math.PI/2)*110});if(enemies.length>before){const e=enemies.at(-1);e.elite=true;e.hp*=2;e.maxHp=e.hp;e.dmg*=1.1;e.blood*=3;ids.push(e.id);}}challenge={ids,reward:90};}},
+  {title:tr('Гнездо паразитов','Parasite Nest'),desc:tr('Четыре элитных противника. Победи всех и получи 90 крови и 12 опыта.','Four elite enemies. Defeat all for 90 Blood and 12 XP.'),label:tr('Начать испытание','Start the challenge'),ok:()=>!challenge&&difficulty().cap-enemies.filter(e=>!e.dead).length>=4,reason:tr('Для испытания нужно место для четырёх врагов. Вернись позже.','The challenge needs space for four enemies. Return later.'),act:()=>{const boost=player.lab.nest;player.lab.nest=false;const ids=[];for(let i=0;i<4;i++){const before=enemies.length;spawnEnemy(i%2?'beetle':'flea',{x:c.x+Math.cos(i*Math.PI/2)*110,y:c.y+Math.sin(i*Math.PI/2)*110});if(enemies.length>before){const e=enemies.at(-1);e.elite=true;e.hp*=boost?3.2:2;e.maxHp=e.hp;e.dmg*=boost?1.3:1.1;e.blood*=3;ids.push(e.id);}}challenge={ids,reward:boost?180:90};}},
   {title:tr('Тихий лагерь','Quiet Camp'),desc:player.survivalMode?tr('Вернуть все рывки и убрать до 4с КД щита (последние 2с остаются) или взять 20 крови.','Fill dash charges and remove up to 4s shield CD (last 2s remain), or take 20 Blood.'):tr('Восстанови 30% HP или возьми 20 крови.','Restore 30% HP or take 20 Blood.'),label:player.survivalMode?tr('Пополнить рывки и перезарядить щит','Refill dashes and recharge shield'):tr('Восстановить 30% HP','Restore 30% HP'),ok:()=>player.survivalMode?(player.dashCharges<3||player.shieldActiveTimer<=0&&player.shieldCooldown>2):player.hp<player.maxHp,reason:tr('Запас уже полон. Можно взять кровь или вернуться позже.','Resources are full. Take Blood or return later.'),act:()=>{if(!vSurvivalPickup('camp'))healPlayer(player.maxHp*.3);},alt:tr('Взять 20 крови','Take 20 Blood'),altAct:()=>{bloodThisRun+=20;}},
   {title:tr('Опасная сделка','Risky Bargain'),desc:player.survivalMode?tr('−8% скорости и +20% базового урона за сделку. Максимум две сделки; сохраняется при загрузке.','−8% speed and +20% base damage per bargain. Max two; persists on reload.'):tr('−15% максимального HP и +20% базового урона шипов. Эффект сохраняется при прокачке и загрузке.','−15% Max HP and +20% base spike damage. Persists through upgrades and reloads.'),label:tr('Заключить сделку','Accept bargain'),ok:()=>player.bargains<2,reason:tr('Предел: две сделки за забег.','Limit: two bargains per run.'),act:()=>{player.bargains++;buildStats(player);player.hp=Math.min(player.hp,player.maxHp);}}
  ];
@@ -3073,7 +3076,7 @@ function renderBalancedMarket(){
  card.innerHTML='<h3>'+modIcon(o.id)+' '+L(o.name)+'</h3><p>'+L(o.desc)+'</p><div class="purchase-effect">'+(o.id.includes('Rental')?tr('Активная кнопка до конца забега','Active button until run end'):marketPreview(o.id))+'</div><small>'+tr('Куплено: ','Purchased: ')+n+(o.cap?'/'+o.cap:'')+'</small><div class="cost">🩸 '+formatCoins(cost)+'</div><small>'+tr('Остаток после покупки: ','Left after purchase: ')+formatCoins(after)+tr(' · выплата при выходе: ',' · payout on exit: ')+formatCoins(bank)+'</small>';
  const b=document.createElement('button');b.className='btn small';b.textContent=allowed?t('buy'):tr('Недоступно / максимум','Unavailable / maxed');b.disabled=!allowed||bloodThisRun<cost;b.onclick=()=>{if(!marketAllowed(o)||bloodThisRun<cost)return;bloodThisRun-=cost;runStats.spent+=cost;player.marketBuys[o.id]=(player.marketBuys[o.id]||0)+1;o.apply();gameAudio.play('buy');if(o.id!=='mutation')renderBalancedMarket();checkpoint();};card.appendChild(b);wrap.appendChild(card);
  }
- renderStoneOffer(wrap);renderCombatMarket(wrap);
+ renderStoneOffer(wrap);renderCombatMarket(wrap);renderLabMarket(wrap);
  document.getElementById('stage-extract').textContent=tr('Завершить забег · расчёт выплаты','End run · review payout');
 }
 function castField(kind){
@@ -3081,11 +3084,11 @@ function castField(kind){
  if(state!=='playing'||cheatsOpen||!player)return false;
  if(kind==='static'){
   if(!player.hasStaticField||player.staticCooldown>0)return false;player.staticCooldown=18;gameAudio.play('field');
-  blast(player.x,player.y,150,14+player.spitDamage*1.35,'staticField');
+  blast(player.x,player.y,150,(4+player.spitDamage*.8)*gearPower(player),'staticField');
   addFloatText(player.x,player.y-65,tr('РАЗРЯД!','DISCHARGE!'),'#b6e6ff',18);
  }else{
   if(!player.hasAcidField||player.acidCooldown>0)return false;player.acidCooldown=24;gameAudio.play('field');
-  fieldZones.push({x:player.x,y:player.y,radius:130,life:4,damage:6+player.spitDamage*.35,timer:0});
+  fieldZones.push({x:player.x,y:player.y,radius:130,life:4,damage:(2+player.spitDamage*.25)*gearPower(player),timer:0});
   addFloatText(player.x,player.y-65,tr('КИСЛОТНОЕ КОЛЬЦО','ACID RING'),'#b5ef9b',16);
  }
  checkpoint();return true;
@@ -3125,20 +3128,20 @@ const ICON_PATHS={flamethrower:'M13 2c4 7-4 7 1 12 5-2 3-6 3-6 10 13-7 18-11 10C
 function modIcon(id){const aliases={magnetCollar:'magnet',chitinPlate:'armor',vampiric:'lifeOnKill',vitality:'regen',fangs:'fangs2',swiftness:'scuttle',appetite:'quickbite',scent:'magnet',resilience:'regen',extraLife:'lifeOnKill',bloodPressure:'burstUp',heal:'regen',mutation:'reserve',staticRental:'staticField',acidRental:'acidField'};const modeId=player?.survivalMode?({regen:'scuttle',resilience:'scuttle',heal:'scuttle',vitality:'carapace',vampiric:'quickbite',lifeOnKill:'quickbite'})[id]||id:id;const path=ICON_PATHS[aliases[modeId]||modeId]||ICON_PATHS.carapace;return '<svg class="mod-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="'+path+'"/></svg>';}
 
 /* Sound & Gear 4.3: one derived-stat calculation shared by purchases, previews and save migration. */
-const BALANCE_REVISION=1;
-function effectiveMoveSpeed(p){return ((p.counterSpeedUntil||0)>elapsed?1.18:1)*p.speed*Math.max(.25,Math.min(1,p.speedMult||1))*worldMoveMultiplier();}
+const BALANCE_REVISION=2;
+function effectiveMoveSpeed(p){return ((p.lab?.speedUntil||0)>elapsed?2:1)*((p.counterSpeedUntil||0)>elapsed?1.18:1)*p.speed*Math.max(.25,Math.min(1,p.speedMult||1))*worldMoveMultiplier();}
 function buildStats(p,counts=p.upgradeCounts){
  syncEquipment(p);const b=p.baseUpgrades,n=id=>counts[id]||0;
- p.spitDamage=(4+b.fangs+3*n('fangs2')+2*n('heavy'))*(1+.20*(p.bargains||0));
- p.attackInterval=Math.max(.16,Math.max(.22,.75-.035*b.appetite)/(1+.15*n('quickbite')));
- p.speed=(132+9*b.swiftness)*(1+.10*n('scuttle'))*(p.survivalMode?Math.pow(.92,p.bargains||0):1);
+ p.spitDamage=(4+.04*b.fangs+3*n('fangs2')+2*n('heavy'))*(1+.20*(p.bargains||0));
+ p.attackInterval=Math.max(.16,(.75/(1+.1*b.appetite/12))/(1+.15*n('quickbite')));
+ p.speed=(132+1.8*b.swiftness)*(1+.10*n('scuttle'))*(p.survivalMode?Math.pow(.92,p.bargains||0):1);
  p.spitRange=230+45*n('range');p.spitSpeed=340*(1+.25*n('velocity'));
- p.maxHp=p.survivalMode?1:Math.max(1,Math.round((32+5*b.vitality+10*n('carapace')+6*(p.marketBuys.vitality||0))*Math.pow(.85,p.bargains||0)));
- p.magnetRadius=46+10*b.scent+(p.equippedGear.includes('magnetCollar')?40:0)+25*n('magnet');
- p.regen=.2*b.resilience+.35*n('regen');p.bloodMult=1+.2*n('greed');
+ p.maxHp=p.survivalMode?1:Math.max(1,Math.round((32+.4*b.vitality+10*n('carapace')+6*(p.marketBuys.vitality||0))*Math.pow(.85,p.bargains||0)));
+ p.magnetRadius=46+2*b.scent+(p.equippedGear.includes('magnetCollar')?40:0)+25*n('magnet');
+ p.regen=.01*b.resilience+.35*n('regen');p.bloodMult=1+.2*n('greed');
  p.shotCount=1+n('multishot');p.pierceCount=n('piercing');p.ricochetCount=n('ricochet');
  p.explosive=n('explosive')>0;p.critChance=.15*n('crit');p.numbingBite=n('numb')>0;
- p.bloodChargeMax=55-3*b.bloodPressure;p.burstDamageMult=1+.15*n('burstUp');p.burstRadius=110+15*n('burstUp')+20*n('area');
+ p.bloodChargeMax=55-.5*b.bloodPressure;p.burstDamageMult=1+.15*n('burstUp');p.burstRadius=110+15*n('burstUp')+20*n('area');
  p.chainRange=40*n('chainReach');p.shotScale=1+.2*n('heavy');p.splashRadius=64+20*n('area');p.splashMult=.30+.05*n('blastPower');
  p.execution=.20*n('execution');p.armor=p.survivalMode?0:.5*n('armor');p.lifeOnKill=p.survivalMode?0:.2*n('lifeOnKill');if(p.survivalMode)p.regen=0;
  return p;
@@ -3207,7 +3210,8 @@ function ensureSlimeLedger(r){
 }
 function migrateBalanceRun(r,profile){
  const old=r.balanceRevision!==BALANCE_REVISION,p=r.player,defaults=newPlayer(profile);
- for(const k of ['bargains','equippedGear','evolutions','shotScale','splashRadius','splashMult','execution','armor','lifeOnKill','lucky','evoTimer','pulseCooldown','leechWindow','leechHealed'])if(p[k]===undefined)p[k]=defaults[k];
+ validateLab(p.lab,r.elapsed);
+ for(const k of ['lab','bargains','equippedGear','evolutions','shotScale','splashRadius','splashMult','execution','armor','lifeOnKill','lucky','evoTimer','pulseCooldown','leechWindow','leechHealed'])if(p[k]===undefined)p[k]=defaults[k];
  if(old){p.baseUpgrades={...profile.upg};p.pulseCooldown=0;p.leechWindow=0;p.leechHealed=0;
   const hpFraction=p.hp/p.maxHp;buildStats(p);p.hp=Math.max(1,Math.min(p.maxHp,p.maxHp*hpFraction));p.bloodCharge=0;
   for(const pr of r.playerProjectiles||[]){const max=p.spitRange+(pr.fromDrone?p.droneRadius:0);pr.travelLeft=Math.min(max,Math.max(0,pr.life*Math.hypot(pr.vx,pr.vy)));pr.life=pr.travelLeft/(Math.hypot(pr.vx,pr.vy)||1);pr.dmg=Math.min(pr.dmg,p.spitDamage*(pr.fromDrone?.45:1));}
@@ -3376,6 +3380,7 @@ function drawCacheModel(c){
  ctx.restore();
 }
 function drawLandmark(c){
+ if(c.type===4){drawGambino(c);return;}
  ctx.save();ctx.translate(c.x,c.y);oval(0,22,c.type===1?52:37,15,'#0b1b1477',null);
  if(c.type===0){
   worldPolygon([[-33,10],[0,-1],[33,10],[33,22],[0,34],[-33,22]],'#6b7e69');
@@ -3990,6 +3995,82 @@ function drawDogHand(e){
  oval(-30,8,10,23,'#dba77b','#704d38',2);ctx.fillStyle='#c78d64';ctx.fillRect(-20,32,40,30);ctx.restore();
 }
 
+/* Local-only balance experiment. All stakes use expedition Blood, never real money. */
+function copyPreviousProgress(){
+ try{
+  if(localStorage.getItem(SAVE_KEY)!==null)return;
+  const previous=localStorage.getItem('tick_blood_gains_save_v1');if(previous===null)return;
+  normalizeSave(JSON.parse(previous));localStorage.setItem(SAVE_KEY,previous);
+  const run=localStorage.getItem('tick_blood_gains_run_v2');if(run!==null&&localStorage.getItem(RUN_KEY)===null)localStorage.setItem(RUN_KEY,run);
+ }catch(e){/* Original progress remains available for explicit export/import. */}
+}
+function gearPower(p){return .15+.85*Math.min(1,Object.entries(p.upgradeCounts).filter(([id])=>['fangs2','quickbite','heavy','crit','multishot','piercing','ricochet','explosive','burstUp','area','blastPower','chainReach'].includes(id)).reduce((n,[,v])=>n+v,0)/12);}
+function validateLab(a,time){if(a===undefined)return;if(!a||['spins','purchases','guard'].some(k=>!Number.isInteger(a[k])||a[k]<0||a[k]>100000)||a.guard>1||typeof a.nest!=='boolean'||typeof a.receipt!=='string'||a.receipt.length>500||['damageUntil','speedUntil'].some(k=>!Number.isFinite(a[k])||a[k]<0||a[k]>time+20.01))throw Error('Invalid experiment state');}
+function labCost(kind){return kind==='spin'?Math.min(1200,180+40*player.lab.spins):Math.round(({nest:90,guard:100,damage:150,speed:120,replace:120})[kind]*(1+.3*player.lab.purchases));}
+function labSpend(cost){if(!player||bloodThisRun<cost)return false;bloodThisRun-=cost;runStats.spent+=cost;rankedRun=false;return true;}
+function labBuy(kind){
+ if(!['event','paused','stageclear'].includes(state)||!['nest','guard','damage','speed'].includes(kind))return false;
+ const a=player.lab;if(kind==='nest'&&a.nest||kind==='guard'&&a.guard||kind==='damage'&&a.damageUntil>elapsed||kind==='speed'&&a.speedUntil>elapsed)return false;
+ if(!labSpend(labCost(kind)))return false;a.purchases++;
+ if(kind==='nest')a.nest=true;if(kind==='guard')a.guard=1;if(kind==='damage')a.damageUntil=elapsed+20;if(kind==='speed')a.speedUntil=elapsed+10;
+ checkpoint();return true;
+}
+function gambinoOutcome(r){if(!Number.isFinite(r)||r<0||r>=1)throw Error('Invalid roll');return r<.0001?'hint':r<.0011?'gear':r<.0211?'guard':r<.0361?'damage':r<.05?'speed':r<.18?'half':r<.26?'quarter':r<.27?'jackpot':'loss';}
+function spinGambino(){
+ if(state!=='event'||!gambinoOpen||!player||mirrorSession)return false;
+ const cost=labCost('spin');if(!labSpend(cost))return false;const a=player.lab;a.spins++;const outcome=gambinoOutcome(Math.random());
+ let result=tr('Не повезло.','No luck.');
+ if(outcome==='jackpot'){bloodThisRun+=cost*10;result=tr('Выигрыш ×10: ','Win ×10: ')+(cost*10)+' 🩸';}
+ if(outcome==='half'||outcome==='quarter'){const refund=Math.floor(cost/(outcome==='half'?2:4));bloodThisRun+=refund;result=tr('Возврат крови: ','Blood returned: ')+refund;}
+ if(outcome==='guard'){a.guard=1;result=tr('Защита от одного попадания. Заряды не складываются.','Protection against one hit. Charges do not stack.');}
+ if(outcome==='damage'){a.damageUntil=Math.max(a.damageUntil,elapsed+20);result=tr('Урон ×2 на 20 секунд игрового времени.','Damage ×2 for 20 seconds of game time.');}
+ if(outcome==='speed'){a.speedUntil=Math.max(a.speedUntil,elapsed+10);result=tr('Скорость +100% на 10 секунд игрового времени.','Speed +100% for 10 seconds of game time.');}
+ if(outcome==='gear'){
+  const pool=EQUIPMENT_DEFS.filter(e=>!save.equip[e.id]);
+  if(pool.length){const item=pool[Math.floor(Math.random()*pool.length)];save.equip[item.id]=true;persistSave();result=tr('Экипировка в коллекции: ','Equipment added to collection: ')+L(item.name)+tr('. Выбери её в наборе.','. Equip it in a preset.');}
+  else{bloodThisRun+=Math.floor(cost/2);result=tr('Коллекция полна — возврат половины ставки.','Collection complete — half the stake returned.');}
+ }
+ if(outcome==='hint')result=String.fromCharCode(84,104,101,114,101,73,115,78,111,83,112,111,111,110);
+ a.receipt=result;checkpoint();renderGambino();return outcome;
+}
+let gambinoOpen=false,labReturn='playing';
+function closeLab(){gambinoOpen=false;const c=mapEvents.find(c=>c.type===4);if(c)c.deferUntilExit=true;setState(labReturn);checkpoint();}
+function openGambino(){if(state!=='playing'||mirrorSession)return;labReturn='playing';gambinoOpen=true;setState('event');renderGambino();}
+function labButton(box,label,fn,disabled=false){const b=document.createElement('button');b.className='btn secondary';b.textContent=label;b.disabled=disabled;b.onclick=fn;box.appendChild(b);}
+function renderGambino(){
+ const box=document.getElementById('event-options');box.innerHTML='';document.getElementById('event-title').textContent=tr('Гамбино','Gambino');
+ document.getElementById('event-desc').textContent=tr('Кровь забега: ','Expedition Blood: ')+Math.floor(bloodThisRun)+tr('. Экипировка 0,1%; особый исход 0,01%; защита 2%; урон 1,5%; скорость 1,39%; половина ставки 13%; четверть 8%; ×10 ставки 1%; проигрыш 73%. Баффы не складываются.','. Equipment 0.1%; special outcome 0.01%; guard 2%; damage 1.5%; speed 1.39%; half back 13%; quarter back 8%; 10× stake 1%; loss 73%. Buffs do not stack.');
+ const receipt=document.createElement('p');receipt.textContent=player.lab.receipt;box.appendChild(receipt);
+ labButton(box,tr('Потянуть рычаг · ','Pull lever · ')+labCost('spin')+' 🩸',spinGambino,bloodThisRun<labCost('spin'));
+ labButton(box,tr('Подготовка к участку','Prepare for next section'),()=>{gambinoOpen=false;renderLabPrep();});labButton(box,tr('Уйти','Leave'),closeLab);
+}
+function openLabPrep(){if(!player||runEnded||mirrorSession||!['playing','paused','stageclear'].includes(state))return;labReturn=state;gambinoOpen=false;setState('event');renderLabPrep();}
+function renderLabMarket(box){labButton(box,tr('Подготовка за кровь','Prepare with Blood'),openLabPrep);}
+function renderLabPrep(){
+ const box=document.getElementById('event-options');box.innerHTML='';document.getElementById('event-title').textContent=tr('Запасы перед охотой','Hunting Supplies');
+ document.getElementById('event-desc').textContent=tr('Только кровь текущего забега. Каждая покупка повышает цены подготовки на 30% базовой цены. В следующем забеге счётчик сбросится. Усиление гнезда: +60% HP и +18% урона врагов относительно обычного гнезда; награда 180 вместо 90 крови.','Current expedition Blood only. Each purchase raises supply prices by 30% of base price; resets next run. Empowered nest: +60% enemy HP and +18% damage over the normal nest; reward 180 instead of 90 Blood.');
+ const a=player.lab;for(const [kind,label,en,active]of [['nest','Усилить следующее гнездо','Empower next nest',a.nest],['guard','Защита от одного попадания','Single-hit protection',a.guard],['damage','Урон ×2 на 20с','Damage ×2 for 20s',a.damageUntil>elapsed],['speed','Скорость +100% на 10с','Speed +100% for 10s',a.speedUntil>elapsed]])labButton(box,tr(label,en)+' · '+labCost(kind)+' 🩸',()=>{if(labBuy(kind))renderLabPrep();},!!active||bloodThisRun<labCost(kind));
+ labButton(box,tr('Вернуться','Return'),closeLab);
+}
+function replaceLabMutation(id,context){
+ if(state!=='levelup'||mutationContext!==context)return false;
+ const pool=availableMutations().filter(u=>!context.picks.includes(u.id));if(!pool.length||!labSpend(labCost('replace')))return false;
+ player.lab.purchases++;const replacement=pool[weightedIndex(pool)].id,picks=context.picks.map(k=>k===id?replacement:k);
+ showUpgradeChoices(context.titleText,context.subtitleText,context.returnState,picks);checkpoint();return true;
+}
+function drawGambino(c){
+ ctx.save();ctx.translate(c.x,c.y);ctx.fillStyle='#27352d';ctx.fillRect(-150,-110,300,230);ctx.strokeStyle='#b69b65';ctx.lineWidth=3;ctx.strokeRect(-150,-110,300,230);
+ ctx.fillStyle='#503d44';ctx.fillRect(-65,-40,130,105);worldPolygon([[-80,-40],[0,-95],[80,-40]],'#96623f');
+ ctx.fillStyle='#e3be64';ctx.font='bold 18px sans-serif';ctx.textAlign='center';ctx.fillText(tr('ГАМБИНО','GAMBINO'),0,-13);ctx.fillStyle='#191d18';ctx.fillRect(-30,12,60,38);ctx.fillStyle='#e8cb7e';ctx.fillText('7 · 7 · 7',0,39);
+ ctx.strokeStyle='#d3b789';ctx.beginPath();ctx.moveTo(65,30);ctx.lineTo(92,-5);ctx.stroke();oval(92,-5,9,9,'#b44850','#e3be64',2);ctx.restore();
+}
+function initializeLabUI(){
+ const pause=document.getElementById('pause-resume');pause.insertAdjacentHTML('beforebegin','<button class="btn secondary" id="lab-prep">Запасы за кровь / Hunting supplies</button>');document.getElementById('lab-prep').onclick=openLabPrep;
+ const note=document.createElement('p');note.textContent='4.9 TEST · Прогресс 4.8 копируется автоматически · Эксперимент вне общего рейтинга';document.querySelector('#menu-screen .panel').appendChild(note);
+}
+for(const u of META_UPGRADES){const ru={vitality:'+0,4 HP за ранг; максимум +8 HP',fangs:'+0,04 урона за ранг; максимум +0,8',swiftness:'+1,8 скорости за ранг; максимум +18',appetite:'До +10% частоты атак при максимуме',scent:'+2 к сбору за ранг; максимум +20',resilience:'+0,01 HP/с за ранг; максимум +0,1',bloodPressure:'−0,5 к порогу импульса за ранг'}[u.id];if(ru)u.desc={ru,en:ru};}
+for(const e of EQUIPMENT_DEFS){const ru={rocket:'Редкий мощный залп раз в 9с; сила зависит от боевых мутаций',drone:'Копирует оружие на 30% мощности × поддержку боевых мутаций',flamethrower:'Ближняя поддержка; сила зависит от боевых мутаций',zapper:'Разряд поддержки раз в 1,4с; сила зависит от боевых мутаций',staticField:'Активный разряд E, окно 18с; сила зависит от мутаций',acidField:'Активная зона Q на 4с, перезарядка 24с; сила зависит от мутаций'}[e.id];if(ru)e.desc={ru,en:ru};}
+
 /* Mirror arena: independent session; never writes expedition checkpoints or pays run currency. */
 var mirrorSession=null,mirrorMusic;
 const MIRROR_BOSS_KEY='mirror_tick';
@@ -4086,7 +4167,8 @@ function initializeMirrorUI(){
 }
 
 /* ========================================================================= BOOT */
-initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();runtimeReady=true;
+initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeLabUI();runtimeReady=true;
+copyPreviousProgress();
 loadSave().then(()=>{
   setState('menu');
   syncWildUI();
