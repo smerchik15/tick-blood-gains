@@ -2666,7 +2666,7 @@ function initializeWildUI(){
   <g fill="#f5d18b" stroke-width="2"><circle cx="-25" cy="-50" r="7"/><circle cx="25" cy="-50" r="7"/></g><g fill="#fff0bd" stroke="none"><circle cx="-27" cy="-52" r="2"/><circle cx="23" cy="-52" r="2"/></g>
   </g><g fill="#cbd6b0" font-family="Georgia,serif" font-size="12" opacity=".7"><text x="29" y="284">Ixodes prosperus</text><text x="340" y="36">fig. 02</text></g></svg>
   <div class="hero-caption" id="wild-caption"></div></div>`;
-  const menu=document.querySelector('#menu-screen .panel');menu.insertAdjacentHTML('afterbegin',hero+'<div class="edition">BLOOD GAINS · WILD FUR · 4.7-dev</div>');
+  const menu=document.querySelector('#menu-screen .panel');menu.insertAdjacentHTML('afterbegin',hero+'<div class="edition">BLOOD GAINS · WILD FUR · '+GAME_VERSION+'</div>');
   document.getElementById('btn-start').insertAdjacentHTML('beforebegin','<button class="btn hidden" id="btn-resume"></button>');
   menu.insertAdjacentHTML('beforeend','<div class="storage-tools"><button class="text-btn" id="export-save"></button><button class="text-btn" id="import-save"></button></div><div id="storage-status"></div><input type="file" id="save-file" accept="application/json,.json" hidden>');
   document.getElementById('hud').insertAdjacentHTML('beforeend','<button id="pause-btn" aria-label="Пауза">Ⅱ</button>');
