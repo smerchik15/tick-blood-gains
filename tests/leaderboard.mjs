@@ -13,3 +13,5 @@ console.log('PASS: server score recomputation, invalid submissions, cheat flag, 
 
 for(const key of ['guard','bombardier','weaver','rhino','firefly','spore']){const r=validateSubmission({...sample,difficulty:'normal',kills:{[key]:2},eliteKills:0});assert.equal(r.score,VALUES[key]*2+240);}
 console.log('PASS: all six new enemy types are accepted and scored by the server.');
+
+for(const key of ["colorado","slider","dog_bliss"]){const r=validateSubmission({...sample,difficulty:"vmode",kills:{[key]:1},eliteKills:0});assert.equal(r.score,(VALUES[key]+240)*3);}

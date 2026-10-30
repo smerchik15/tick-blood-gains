@@ -1,6 +1,6 @@
 {
   "name": "tick-blood-gains",
-  "version": "4.7.0-dev",
+  "version": "4.8.0-dev",
   "private": true,
   "type": "module",
   "scripts": {

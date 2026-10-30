@@ -1,5 +1,5 @@
-export const VALUES={guard:12,bombardier:20,weaver:16,rhino:24,firefly:12,spore:14,ant:3,mosquito:5,flea:9,beetle:16,spider:14,wasp:18,drone:4,maggot:3,flea_king:400,mite_queen:650,louse_baron:800,old_scratch:1000,botfly_broodmother:900,mantis_blade:1200,hornet_turret:1300,roach_tank:1500,dragonfly_interceptor:1400,danys_mom:3000};
-const MODES=['expedition','swarm'],MULT={easy:.75,normal:1,hard:1.5,impossible:2.2};
+export const VALUES={colorado:22,slider:18,dog_bliss:3200,guard:12,bombardier:20,weaver:16,rhino:24,firefly:12,spore:14,ant:3,mosquito:5,flea:9,beetle:16,spider:14,wasp:18,drone:4,maggot:3,flea_king:400,mite_queen:650,louse_baron:800,old_scratch:1000,botfly_broodmother:900,mantis_blade:1200,hornet_turret:1300,roach_tank:1500,dragonfly_interceptor:1400,danys_mom:3000};
+const MODES=['expedition','swarm'],MULT={easy:.75,normal:1,hard:1.5,impossible:2.2,vmode:3};
 export function validateSubmission(b){
  if(!b||b.v!==4||b.ranked!==true||typeof b.id!=='string'||!/^[a-zA-Z0-9-]{8,80}$/.test(b.id)||!Object.hasOwn(MULT,b.difficulty)||!MODES.includes(b.mode)||!Number.isInteger(b.elapsed)||b.elapsed<10||b.elapsed>43200||!b.kills||typeof b.kills!=='object'||Array.isArray(b.kills)||!Number.isInteger(b.eliteKills)||b.eliteKills<0)throw Error('Некорректный результат');
  let kills=0,points=0,bosses=0,normal=0;
