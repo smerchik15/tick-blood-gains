@@ -4167,7 +4167,7 @@ function initializeMirrorUI(){
 }
 
 function initializeFeedbackUI(){
- for(const [target,id]of [['#menu-screen .panel','feedback-menu'],['#paused-screen .panel','feedback-pause']]){const panel=document.querySelector(target);if(!panel)continue;const button=document.createElement('button');button.className='btn secondary small';button.id=id;button.textContent=tr('Обратная связь','Feedback');button.onclick=()=>{if(location.protocol==='file:'){toast(tr('Обратная связь доступна на сайте игры','Feedback is available on the game website'));return;}if(state==='playing')pauseRun();checkpoint();window.location.href='/feedback?version='+encodeURIComponent(GAME_VERSION);};panel.appendChild(button);}
+ for(const [target,id]of [['#menu-screen .panel','feedback-menu'],['#paused-screen .panel','feedback-pause']]){const panel=document.querySelector(target);if(!panel)continue;panel.insertAdjacentHTML('afterbegin','<button class="btn secondary small" id="'+id+'"></button>');const button=document.getElementById(id);button.textContent=tr('Обратная связь','Feedback');button.onclick=()=>{if(location.protocol==='file:'){toast(tr('Обратная связь доступна на сайте игры','Feedback is available on the game website'));return;}if(state==='playing')pauseRun();checkpoint();window.location.href='/feedback?version='+encodeURIComponent(GAME_VERSION);};}
 }
 /* ========================================================================= BOOT */
 initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeLabUI();initializeFeedbackUI();runtimeReady=true;
