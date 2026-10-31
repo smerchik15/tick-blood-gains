@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="КЛЕЩ">
 <meta name="description" content="Выживи в шерстяных угодьях: собирай кровь, выбирай мутации и побеждай боссов. Игра с сенсорным управлением.">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>КЛЕЩ · Blood Gains — Gambino Lab 4.9-test</title>
+<title>КЛЕЩ · Blood Gains — Gambino Lab 4.9.1-test</title>
 <style>
   :root{
     --bg-fur:#1c110d;
@@ -384,7 +384,7 @@ html,body{position:fixed;inset:0;overscroll-behavior:none}#game-canvas{touch-act
    localStorage (synchronous) or a proper mobile storage plugin. Everything
    else in the game is untouched by that change.
    ========================================================================= */
-const GAME_VERSION='4.9-test';
+const GAME_VERSION='4.9.1-test';
 const ECONOMY_VERSION=4,MAX_RUN_LEVEL=50;
 const SAVE_KEY = 'tick_blood_gains_lab49_save_v1';
 const DEFAULT_SAVE = { bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,monthly:null,audio:{enabled:true,volume:.35},
@@ -4166,8 +4166,11 @@ function initializeMirrorUI(){
  mirrorMusic=createMirrorMusic();window.addEventListener('pointerdown',()=>mirrorMusic.sync(),{capture:true,passive:true});window.addEventListener('keydown',()=>mirrorMusic.sync(),{capture:true});window.addEventListener('pagehide',()=>mirrorMusic.stop());
 }
 
+function initializeFeedbackUI(){
+ for(const [target,id]of [['#menu-screen .panel','feedback-menu'],['#paused-screen .panel','feedback-pause']]){const panel=document.querySelector(target);if(!panel)continue;const button=document.createElement('button');button.className='btn secondary small';button.id=id;button.textContent=tr('Обратная связь','Feedback');button.onclick=()=>{if(location.protocol==='file:'){toast(tr('Обратная связь доступна на сайте игры','Feedback is available on the game website'));return;}if(state==='playing')pauseRun();checkpoint();window.location.href='/feedback?version='+encodeURIComponent(GAME_VERSION);};panel.appendChild(button);}
+}
 /* ========================================================================= BOOT */
-initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeLabUI();runtimeReady=true;
+initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeLabUI();initializeFeedbackUI();runtimeReady=true;
 copyPreviousProgress();
 loadSave().then(()=>{
   setState('menu');

@@ -1,3 +1,4 @@
+import {feedbackRoute} from './feedback.mjs';
 export const VALUES={colorado:22,slider:18,dog_bliss:3200,guard:12,bombardier:20,weaver:16,rhino:24,firefly:12,spore:14,ant:3,mosquito:5,flea:9,beetle:16,spider:14,wasp:18,drone:4,maggot:3,flea_king:400,mite_queen:650,louse_baron:800,old_scratch:1000,botfly_broodmother:900,mantis_blade:1200,hornet_turret:1300,roach_tank:1500,dragonfly_interceptor:1400,danys_mom:3000};
 const MODES=['expedition','swarm'],MULT={easy:.75,normal:1,hard:1.5,impossible:2.2,vmode:3};
 export function validateSubmission(b){
@@ -33,4 +34,4 @@ export async function leaderboard(request,env){
   await env.DB.prepare('INSERT OR IGNORE INTO scores (id, nickname, score, difficulty, mode, elapsed, kills, bosses, counts_json, ip_key, created_at, season) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 4)').bind(row.id,row.nickname,row.score,row.difficulty,row.mode,row.elapsed,row.kills,row.bosses,row.counts,ipKey,now).run();return json({score:row.score});
  }catch(e){console.error('leaderboard unavailable',e.message);return json({error:'Рейтинг временно недоступен. Личный рекорд сохранён.'},503);}
 }
-export default {async fetch(request,env){const url=new URL(request.url);if(url.pathname==='/api/leaderboard')return leaderboard(request,env);if(url.pathname==='/'||url.pathname==='/index.html')return new Response(HTML,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'}});return new Response('Not found',{status:404});}};
+export default {async fetch(request,env){const url=new URL(request.url);if(url.pathname==='/feedback'||url.pathname==='/feedback/inbox'||url.pathname==='/api/feedback'||url.pathname==='/api/feedback/session')return feedbackRoute(request,env);if(url.pathname==='/api/leaderboard')return leaderboard(request,env);if(url.pathname==='/'||url.pathname==='/index.html')return new Response(HTML,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'same-origin'}});return new Response('Not found',{status:404});}};
