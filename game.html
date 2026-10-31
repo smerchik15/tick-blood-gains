@@ -1603,9 +1603,14 @@ function update(dt){
         e.blinkTimer -= dt;
         if(e.blinkTimer<=0){
           e.x = e.blinkX; e.y = e.blinkY;
-          const bdx=player.x-e.x, bdy=player.y-e.y, bd=Math.hypot(bdx,bdy)||1;
+          e.blinkAim=Math.atan2(player.y-e.y,player.x-e.x);
+          e.blinkState='windup';e.blinkTimer=.65;
+        }
+      } else if(e.blinkState==='windup'){
+        e.blinkTimer-=dt;
+        if(e.blinkTimer<=0){
           for(let k=-1;k<=1;k++){
-            const ang = Math.atan2(bdy,bdx) + k*0.22;
+            const ang = e.blinkAim + k*0.22;
             enemyProjectiles.push({x:e.x,y:e.y,vx:Math.cos(ang)*230,vy:Math.sin(ang)*230,radius:5,dmg:e.dmg*0.8,life:2.2,
               parryable:true, cause:L(e.name)+' '+t('causeBlink')});
           }
@@ -1892,6 +1897,11 @@ function drawEnemy(e){
     ctx.beginPath(); ctx.arc(e.blinkX,e.blinkY,e.radius+8,0,Math.PI*2);
     ctx.strokeStyle='rgba(126,220,255,'+Math.max(0.2,pulse)+')'; ctx.lineWidth=3; ctx.setLineDash([5,5]);
     ctx.stroke(); ctx.setLineDash([]);
+  }
+  if(isBoss && e.behavior==='boss_dragonfly' && e.blinkState==='windup'){
+    ctx.save();ctx.strokeStyle='#7edcff';ctx.lineWidth=2;ctx.setLineDash([6,5]);
+    for(let k=-1;k<=1;k++){const a=e.blinkAim+k*.22;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+Math.cos(a)*500,e.y+Math.sin(a)*500);ctx.stroke();}
+    ctx.setLineDash([]);ctx.beginPath();ctx.arc(e.x,e.y,e.radius+10,0,Math.PI*2);ctx.stroke();ctx.restore();
   }
   if(isBoss && e.behavior==='boss_brood'){
     if(e.broodState==='telegraph'){
@@ -3777,7 +3787,7 @@ function migrateCombat(r,profile){
  if(!Array.isArray(p.vGuardLevels)||p.vGuardLevels.length>MAX_RUN_LEVEL||p.vGuardLevels.some(n=>n>p.level))throw Error('Invalid guard purchases');
  for(const effect of Object.values(p.statusEffects)){if(!effect||!Number.isFinite(effect.life)||effect.life<0||effect.life>4||effect.rate!==undefined&&(!Number.isFinite(effect.rate)||effect.rate<0||effect.rate>10000)||effect.tick!==undefined&&(!Number.isFinite(effect.tick)||Math.abs(effect.tick)>1))throw Error('Invalid status');}
  if(Object.keys(p.statusEffects).some(k=>!['poison','burn','jammed','exposed'].includes(k)))throw Error('Unknown status');
- for(const e of r.enemies){if(e.resistType!==undefined&&!Object.hasOwn(ELEMENTS,e.resistType))throw Error('Invalid resistance');if(e.brain&&!validBrain(e.brain))throw Error('Invalid boss cycle');for(const k of ['toxinLife','toxinRate','electricImmuneUntil','electricFlash'])if(e[k]!==undefined&&(!Number.isFinite(e[k])||e[k]<0||e[k]>1e9))throw Error('Invalid enemy status');}
+ for(const e of r.enemies){if(e.behavior==='boss_dragonfly'&&e.blinkState==='windup'&&(!Number.isFinite(e.blinkAim)||!Number.isFinite(e.blinkTimer)||e.blinkTimer<0||e.blinkTimer>.65))throw Error('Invalid dragonfly windup');if(e.resistType!==undefined&&!Object.hasOwn(ELEMENTS,e.resistType))throw Error('Invalid resistance');if(e.brain&&!validBrain(e.brain))throw Error('Invalid boss cycle');for(const k of ['toxinLife','toxinRate','electricImmuneUntil','electricFlash'])if(e[k]!==undefined&&(!Number.isFinite(e[k])||e[k]<0||e[k]>1e9))throw Error('Invalid enemy status');}
  for(const shot of r.playerProjectiles){if(!shot.damageType)shot.damageType=shot.fromDrone?'physical':weaponDef(p).type;if(!Object.hasOwn(ELEMENTS,shot.damageType))throw Error('Invalid projectile element');}
 }
 function drawTypedProjectile(pr){const color=ELEMENTS[pr.damageType]?.color;if(!color||pr.damageType==='physical')return false;ctx.save();ctx.translate(pr.x,pr.y);ctx.rotate(Math.atan2(pr.vy,pr.vx));ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;ctx.beginPath();if(pr.damageType==='electric'){ctx.moveTo(-10,0);ctx.lineTo(-3,-4);ctx.lineTo(0,3);ctx.lineTo(10,0);ctx.stroke();}else if(pr.damageType==='cold'){ctx.moveTo(11,0);ctx.lineTo(-2,-5);ctx.lineTo(-8,0);ctx.lineTo(-2,5);ctx.closePath();ctx.fill();}else{ctx.ellipse(0,0,pr.damageType==='fire'?10:7,5,0,0,Math.PI*2);ctx.fill();}ctx.restore();return true;}
@@ -3823,7 +3833,7 @@ function initBossBrain(e){
  if(!e.brain){e.brain={phase:'intro',action:cfg.actions[0],timer:1.5,cycle:0,tx:e.x,ty:e.y,sx:e.x,sy:e.y,angle:0,progress:0,rage:1};e.invulnerable=false;e.broodState='idle';e.bigHop=false;for(const k of ['slamState','mantisState','spreadState','turretState','blinkState','dashState'])e[k]='idle';e.hitCooldown=1.5;}
  return e.brain;
 }
-function bossContactSafe(e){if(e.mirrorBrain)return ['intro','warn','recover'].includes(e.mirrorBrain.phase);return e.type==='boss'&&e.brain&&['intro','warn','recover'].includes(e.brain.phase);}
+function bossContactSafe(e){if(e.behavior==='boss_dragonfly'&&e.blinkState==='windup')return true;if(e.mirrorBrain)return ['intro','warn','recover'].includes(e.mirrorBrain.phase);return e.type==='boss'&&e.brain&&['intro','warn','recover'].includes(e.brain.phase);}
 function beginBossWarning(e){
  const b=e.brain,c=BOSS_PATTERNS[e.bossKey];b.rage=e.bossKey==='danys_mom'?(e.hp/e.maxHp<.35?3:e.hp/e.maxHp<.7?2:1):(e.hp/e.maxHp<.35?2:1);
  b.action=c.actions[b.cycle%c.actions.length];if(e.bossKey==='danys_mom'&&b.rage===3&&b.cycle%3===2)b.action='vacuum';
