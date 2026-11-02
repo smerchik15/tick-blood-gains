@@ -1,0 +1,65 @@
+{
+  "note": "Deterministic Node VM CPU/draw-call benchmark; Canvas is stubbed. These are not browser FPS or phone temperature measurements.",
+  "scenarios": {
+    "normal": {
+      "baseline": {
+        "median_ms": 7.954,
+        "p95_ms": 10.952,
+        "update_median_ms": 4.429,
+        "render_median_ms": 3.584,
+        "draw_calls_per_frame": 5789,
+        "geometry_calls_per_frame": 5778,
+        "enemies": 120
+      },
+      "current": {
+        "median_ms": 1.431,
+        "p95_ms": 2.11,
+        "update_median_ms": 0.655,
+        "render_median_ms": 0.759,
+        "draw_calls_per_frame": 809,
+        "geometry_calls_per_frame": 742,
+        "enemies": 120
+      }
+    },
+    "dense": {
+      "baseline": {
+        "median_ms": 37.749,
+        "p95_ms": 43.96,
+        "update_median_ms": 21.29,
+        "render_median_ms": 15.969,
+        "draw_calls_per_frame": 27863,
+        "geometry_calls_per_frame": 27801,
+        "enemies": 260
+      },
+      "current": {
+        "median_ms": 3.902,
+        "p95_ms": 6.014,
+        "update_median_ms": 1.356,
+        "render_median_ms": 2.544,
+        "draw_calls_per_frame": 2489,
+        "geometry_calls_per_frame": 2159,
+        "enemies": 260
+      }
+    },
+    "extreme": {
+      "baseline": {
+        "median_ms": 67.609,
+        "p95_ms": 82.049,
+        "update_median_ms": 51.216,
+        "render_median_ms": 16.121,
+        "draw_calls_per_frame": 29168,
+        "geometry_calls_per_frame": 29104,
+        "enemies": 260
+      },
+      "current": {
+        "median_ms": 5.526,
+        "p95_ms": 9.633,
+        "update_median_ms": 2.176,
+        "render_median_ms": 3.152,
+        "draw_calls_per_frame": 3627,
+        "geometry_calls_per_frame": 3294,
+        "enemies": 260
+      }
+    }
+  }
+}

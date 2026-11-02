@@ -14,7 +14,7 @@ a.startRun();const canvas=elements.get('game-canvas'),event=(id,x,y)=>({pointerI
 a.setMobilePreferences('left',1);assert.equal(a.get().joyPointerId,49);assert.equal(a.get().joyDirX,joy.joyDirX);assert.equal(a.get().joyMag,joy.joyMag);a.setMobilePreferences('left',.6);assert.equal(a.get().joyPointerId,49);
 elements.get('shield-btn').listeners.pointerdown(event(50,15,600));assert(a.get().player.shieldActiveTimer>0);elements.get('dash-btn').listeners.pointerdown(event(51,15,700));assert(a.get().dashCooldown>0);
 for(let i=0;i<10;i++)a.changeMobileZoom(.1);assert.equal(a.save.mobile.zoom,1);for(let i=0;i<10;i++)a.changeMobileZoom(-.1);assert.equal(a.save.mobile.zoom,.6);
-const stored=JSON.parse(storage.get('tick_blood_gains_lab49_save_v1'));assert.equal(stored.mobile.side,'left');assert.equal(stored.mobile.zoom,.6);assert.equal(a.normalizeSave(stored).mobile.zoom,.6);
+const stored=JSON.parse(storage.get('tick_blood_gains_journey50_save_v1'));assert.equal(stored.mobile.side,'left');assert.equal(stored.mobile.zoom,.6);assert.equal(a.normalizeSave(stored).mobile.zoom,.6);
 sandbox.window.navigator={maxTouchPoints:5};sandbox.window.innerWidth=844;sandbox.window.innerHeight=390;a.resize();assert(a.isMobileUI());assert.equal(a.gameZoom(),.6);a.render();
 elements.get('mobile-right-pause').onclick();assert.equal(a.save.mobile.side,'right');a.startSwarmRun();assert.equal(a.save.mobile.zoom,.6);a.render();
 console.log('PASS: 60–100% zoom, desktop baseline, viewport/camera bounds, offscreen spawns, portrait/landscape, pre-run and pause side selectors, saved preferences, joystick continuity and shield/dash input.');

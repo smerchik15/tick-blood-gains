@@ -1,10 +1,12 @@
 {
   "name": "tick-blood-gains",
-  "version": "4.9.2-test",
+  "version": "5.2.0-test",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node scripts/build-game.mjs",
-    "test": "node tests/lab49.cjs && node tests/migration49.cjs && node tests/leaderboard.mjs && node tests/feedback.mjs && node tests/mobile.cjs"
+    "test": "node tests/lab49.cjs && node tests/migration49.cjs && node tests/leaderboard.mjs && node tests/feedback.mjs && node tests/mobile.cjs && node tests/dragonfly.cjs && node tests/journey.cjs && node tests/pressure.cjs && node tests/performance.cjs && node tests/ascent.cjs",
+    "benchmark": "node scripts/benchmark-game.cjs",
+    "audit:impossible": "node scripts/audit-impossible.cjs"
   }
 }
