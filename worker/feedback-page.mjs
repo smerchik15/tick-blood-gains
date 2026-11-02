@@ -5,7 +5,7 @@ ${inbox?'<p class="muted">Закрытый раздел владельца. Зд
 <script>${inbox?adminScript:formScript}</script></main></body></html>`;}
 const formScript=`
 const form=document.getElementById('feedback'),notice=document.getElementById('notice'),send=document.getElementById('send'),message=document.getElementById('message');
-let id=crypto.randomUUID(),sent=false;const version=(new URLSearchParams(location.search).get('version')||'4.9.1-test').slice(0,40);
+let id=crypto.randomUUID(),sent=false;const version=(new URLSearchParams(location.search).get('version')||'4.9.2-test').slice(0,40);
 try{message.value=sessionStorage.getItem('tick-feedback-draft')||'';}catch{}
 form.addEventListener('input',()=>{id=crypto.randomUUID();sent=false;});
 message.addEventListener('input',()=>{sent=false;try{sessionStorage.setItem('tick-feedback-draft',message.value);}catch{}});

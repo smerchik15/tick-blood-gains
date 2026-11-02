@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="КЛЕЩ">
 <meta name="description" content="Выживи в шерстяных угодьях: собирай кровь, выбирай мутации и побеждай боссов. Игра с сенсорным управлением.">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>КЛЕЩ · Blood Gains — Gambino Lab 4.9.1-test</title>
+<title>КЛЕЩ · Blood Gains — Gambino Lab 4.9.2-test</title>
 <style>
   :root{
     --bg-fur:#1c110d;
@@ -223,6 +223,11 @@ html,body{position:fixed;inset:0;overscroll-behavior:none}#game-canvas{touch-act
   .patron-note strong{display:block;font-size:9px;line-height:1.5;letter-spacing:.9px;font-weight:700;text-transform:uppercase;color:#c3b797;}
   .patron-note p{margin:5px 0 0;font-size:12px;line-height:1.5;overflow-wrap:break-word;}
   @media(max-width:420px){.patron-note{gap:10px;padding:10px;grid-template-columns:40px minmax(0,1fr)}.patron-note img{width:40px;height:40px}.patron-note strong{font-size:8px;letter-spacing:.65px}.patron-note p{font-size:11px}}
+
+.mobile-settings{margin:14px 0;padding:12px;border:1px solid #a38c62;border-radius:10px;text-align:left;color:#493a25;background:#f3e8cf}.mobile-settings legend{font-size:14px;font-weight:bold}.mobile-settings p{font-size:12px;margin:4px 0 9px}.mobile-settings .mobile-options{display:flex;gap:8px;flex-wrap:wrap}.mobile-settings button{flex:1;min-height:44px;padding:9px;border:2px solid #a18e69;border-radius:8px;background:#fff5de;color:#443725;font:inherit;font-size:13px;touch-action:manipulation}.mobile-settings button[aria-pressed="true"]{background:#27483b;color:#fff0ce;border-color:#27483b}
+#mobile-zoom{position:fixed;left:calc(10px + env(safe-area-inset-left));z-index:6;display:flex;align-items:center;gap:4px;padding:3px;border:1px solid #9baa89;border-radius:10px;background:#1b302ce8;color:#f1e6c9;font:12px system-ui,sans-serif;touch-action:manipulation}#mobile-zoom button{width:42px;height:42px;background:transparent;border:0;color:inherit;font:24px system-ui;touch-action:manipulation}#mobile-zoom span{min-width:38px;text-align:center}#mobile-zoom button:disabled{opacity:.35}
+body.controls-left #shield-btn,body.controls-left #dash-btn{right:auto;left:calc(14px + env(safe-area-inset-left))}body.controls-left .field-skill{right:auto;left:calc(86px + env(safe-area-inset-left))}body.controls-left #touch-stop{left:auto;right:calc(14px + env(safe-area-inset-right))}body.controls-left #expedition-hud{left:auto;right:calc(14px + env(safe-area-inset-right));text-align:right}
+@media(max-height:620px){body.controls-left #shield-btn,body.controls-left #dash-btn{left:calc(12px + env(safe-area-inset-left))}body.controls-left .field-skill{left:calc(72px + env(safe-area-inset-left))}#mobile-zoom button{width:36px;height:36px}}
 </style>
 </head>
 <body>
@@ -390,10 +395,10 @@ html,body{position:fixed;inset:0;overscroll-behavior:none}#game-canvas{touch-act
    localStorage (synchronous) or a proper mobile storage plugin. Everything
    else in the game is untouched by that change.
    ========================================================================= */
-const GAME_VERSION='4.9.1-test';
+const GAME_VERSION='4.9.2-test';
 const ECONOMY_VERSION=4,MAX_RUN_LEVEL=50;
 const SAVE_KEY = 'tick_blood_gains_lab49_save_v1';
-const DEFAULT_SAVE = { bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,monthly:null,audio:{enabled:true,volume:.35},
+const DEFAULT_SAVE = { bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,monthly:null,audio:{enabled:true,volume:.35},mobile:{side:"right",zoom:1},
   upg:{vitality:0,fangs:0,swiftness:0,appetite:0,scent:0,resilience:0,extraLife:0,bloodPressure:0},
   equip:{magnetCollar:false, chitinPlate:false, vampiric:false, flamethrower:false, zapper:false, rocket:false, drone:false,staticField:false,acidField:false,chickenCannon:false}
 };
@@ -406,7 +411,7 @@ function normalizeSave(raw){
     if(raw[k]!==undefined && (!Number.isFinite(raw[k]) || raw[k]<0 || raw[k]>1e12)) throw Error('Invalid currency');
     out[k]=Math.floor(raw[k]||0);
   }
-  out.lang=raw.lang==='en'?'en':'ru';
+  out.lang=raw.lang==='en'?'en':'ru';out.mobile={side:raw.mobile?.side==='left'?'left':'right',zoom:Number.isFinite(raw.mobile?.zoom)?Math.round(Math.max(.6,Math.min(1,raw.mobile.zoom))*10)/10:1};
   out.stones=Object.fromEntries(STONES.map(s=>[s.id,raw.stones?.[s.id]===true]));out.secretMode=raw.secretMode===true&&STONES.every(s=>out.stones[s.id]);out.monthly=normalizeMonthly(raw.monthly);
   out.audio={enabled:raw.audio?.enabled!==false,volume:Number.isFinite(raw.audio?.volume)?Math.max(0,Math.min(1,raw.audio.volume)):.35};
   out.settlements=Array.isArray(raw.settlements)?raw.settlements.filter(x=>typeof x==='string'&&x.length<80).slice(-100):[];
@@ -538,6 +543,7 @@ function resize(){
   canvas.style.width=W+'px';canvas.style.height=H+'px';
   canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR);
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  if(mobileUIReady)syncMobileSettings();
   if(runtimeReady&&player){render();if(state==='playing'){updateHUD();updateWildHUD();}}
 }
 window.addEventListener('orientationchange',resize);
@@ -880,16 +886,17 @@ canvas.addEventListener('lostpointercapture',finishJoystick);
 
 /* ========================================================================= SPAWNING */
 function edgeSpawnPoint(){
+  const vw=viewWidth(),vh=viewHeight();
   // Spawn beyond the visible camera, but still inside the explorable world.
-  const cx=Math.max(0,Math.min(WORLD.w-W,player.x-W/2));
-  const cy=Math.max(0,Math.min(WORLD.h-H,player.y-H/2));
+  const cx=Math.max(0,Math.min(WORLD.w-vw,player.x-vw/2));
+  const cy=Math.max(0,Math.min(WORLD.h-vh,player.y-vh/2));
   for(let attempt=0;attempt<12;attempt++){
     const side=Math.floor(Math.random()*4), pad=75;
-    let x=side<2?cx+Math.random()*W:(side===2?cx-pad:cx+W+pad);
-    let y=side<2?(side===0?cy-pad:cy+H+pad):cy+Math.random()*H;
+    let x=side<2?cx+Math.random()*vw:(side===2?cx-pad:cx+vw+pad);
+    let y=side<2?(side===0?cy-pad:cy+vh+pad):cy+Math.random()*vh;
     if(x>35&&x<WORLD.w-35&&y>35&&y<WORLD.h-35) return {x,y};
   }
-  const angle=Math.random()*Math.PI*2, d=Math.max(300,Math.min(W,H)*0.65);
+  const angle=Math.random()*Math.PI*2, d=Math.max(300,Math.min(vw,vh)*0.65);
   return {x:Math.max(35,Math.min(WORLD.w-35,player.x+Math.cos(angle)*d)),
           y:Math.max(35,Math.min(WORLD.h-35,player.y+Math.sin(angle)*d))};
 }
@@ -1961,10 +1968,10 @@ function drawEnemy(e){
 function render(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.clearRect(0,0,W,H);
-  camera.x=Math.max(0,Math.min(Math.max(0,WORLD.w-W),player.x-W/2));
-  camera.y=Math.max(0,Math.min(Math.max(0,WORLD.h-H),player.y-H/2));
+  const zoom=gameZoom();camera.x=Math.max(0,Math.min(Math.max(0,WORLD.w-viewWidth()),player.x-viewWidth()/2));
+  camera.y=Math.max(0,Math.min(Math.max(0,WORLD.h-viewHeight()),player.y-viewHeight()/2));
   ctx.save();
-  ctx.translate(-camera.x,-camera.y);
+  ctx.scale(zoom,zoom);ctx.translate(-camera.x,-camera.y);
   if(shakeTime>0){
     ctx.translate((Math.random()-0.5)*shakeMag, (Math.random()-0.5)*shakeMag);
   }
@@ -2036,7 +2043,7 @@ function render(){
     ctx.shadowBlur=0;
     ctx.restore();
   }
-  for(const e of enemies){ if(Math.abs(e.x-player.x)<W/2+260 && Math.abs(e.y-player.y)<H/2+260) drawEnemy(e); }
+  for(const e of enemies){ if(e.x>camera.x-260&&e.x<camera.x+viewWidth()+260&&e.y>camera.y-260&&e.y<camera.y+viewHeight()+260) drawEnemy(e); }
   if(player) drawTick(player);
   if(player && player.hasDrone) drawDrone(player);
   if(player && player.shieldActiveTimer>0){
@@ -2295,12 +2302,12 @@ function makeFurTile(){
 function drawBackdrop(){
   if(!furTile) furTile=makeFurTile();
   const pattern=ctx.createPattern(furTile,'repeat');ctx.fillStyle=pattern;
-  ctx.fillRect(camera.x-20,camera.y-20,W+40,H+40);
+  ctx.fillRect(camera.x-20,camera.y-20,viewWidth()+40,viewHeight()+40);
   const palettes=[['#9ba36b16','#23392c22'],['#caa57916','#182b2633'],['#78b1a218','#15352d33'],['#bd92611c','#232d2233']];
   const colors=palettes[currentStageIdx%palettes.length];
   for(let i=0;i<65;i++){
     const x=hash(i+32)*WORLD.w,y=hash(i+421)*WORLD.h;
-    if(x<camera.x-180||x>camera.x+W+180||y<camera.y-180||y>camera.y+H+180)continue;
+    if(x<camera.x-180||x>camera.x+viewWidth()+180||y<camera.y-180||y>camera.y+viewHeight()+180)continue;
     ctx.fillStyle=colors[i%2];ctx.beginPath();ctx.ellipse(x,y,60+hash(i+40)*100,30+hash(i+22)*90,i,0,Math.PI*2);ctx.fill();
     if(i%3===0){ctx.strokeStyle='#c3b58515';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x-30,y+45);ctx.bezierCurveTo(x-60,y-20,x+50,y+15,x+15,y-60);ctx.stroke();}
   }
@@ -2497,7 +2504,7 @@ function renderBuild(){
   const healNote=document.getElementById('healing-sources');if(healNote)healNote.textContent=healingSourcesText();
   document.getElementById('pause-summary').textContent=difficultyName()+' · '+formatTime(elapsed)+' · '+killCount+tr(' убийств · тайников ',' kills · caches ')+discoveries+'/18 · '+tr('элит ','elites ')+elitesKilled;
 }
-function drawCaches(){for(const c of caches)if(Math.abs(c.x-player.x)<W/2+100&&Math.abs(c.y-player.y)<H/2+100)drawCacheModel(c);}
+function drawCaches(){for(const c of caches)if(c.x>camera.x-100&&c.x<camera.x+viewWidth()+100&&c.y>camera.y-100&&c.y<camera.y+viewHeight()+100)drawCacheModel(c);}
 
 function drawScreenHUD(){
   const compact=W<600||H<500,size=Math.min(compact?94:132,Math.max(60,Math.floor(Math.min(W,H)*.26))),pad=12,x=W-size-pad,y=Math.max(82,H-size-(compact?150:176));
@@ -2506,7 +2513,7 @@ function drawScreenHUD(){
   const v=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.3,W/2,H/2,Math.max(W,H)*.75);v.addColorStop(0,'#0e211200');v.addColorStop(1,'#0a170f65');ctx.fillStyle=v;ctx.fillRect(0,0,W,H);
   ctx.fillStyle='#182b22e8';ctx.strokeStyle='#89977780';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(x,y,size,size,10);ctx.fill();ctx.stroke();
   const mx=a=>x+8+a/WORLD.w*(size-16),my=a=>y+8+a/WORLD.h*(size-16);
-  ctx.strokeStyle='#e1d6a33a';ctx.strokeRect(mx(camera.x),my(camera.y),W/WORLD.w*(size-16),H/WORLD.h*(size-16));
+  ctx.strokeStyle='#e1d6a33a';ctx.strokeRect(mx(camera.x),my(camera.y),viewWidth()/WORLD.w*(size-16),viewHeight()/WORLD.h*(size-16));
   for(const c of caches)if(c.seen&&!c.opened)drawMapGlyph(mx(c.x),my(c.y),'chest',['#efb47d','#ade3b8','#d0b4e1'][c.kind]);
   for(const c of mapEvents)if(c.seen&&!c.done)drawMapGlyph(mx(c.x),my(c.y),['spire','arena','tent','stall','casino'][c.type],c.type===0&&bloodThisRun<30?'#d7a17c':'#c6d696');
   for(const e of enemies)if(e.elite||e===bossActive){ctx.fillStyle=e===bossActive?'#f28089':'#f4d291';ctx.beginPath();ctx.arc(mx(e.x),my(e.y),e===bossActive?3:2,0,Math.PI*2);ctx.fill();}
@@ -2514,10 +2521,10 @@ function drawScreenHUD(){
   ctx.fillStyle='#b6c1a7';ctx.font='9px "Segoe UI",sans-serif';ctx.textAlign='left';ctx.fillText(tr('ШЕРСТЯНЫЕ УГОДЬЯ','THE FUR WILDS'),x+8,y-8);
   // On-screen direction marker when the boss is outside the viewport.
   if(bossActive){
-    const b=bossActive,bx=b.x-camera.x,by=b.y-camera.y;
+    const b=bossActive,bx=(b.x-camera.x)*gameZoom(),by=(b.y-camera.y)*gameZoom();
     if(bx<40||bx>W-40||by<100||by>H-40){
       const angle=Math.atan2(b.y-player.y,b.x-player.x),r=Math.min(W*.38,H*.34);
-      const ax=player.x-camera.x+Math.cos(angle)*r,ay=player.y-camera.y+Math.sin(angle)*r;
+      const ax=(player.x-camera.x)*gameZoom()+Math.cos(angle)*r,ay=(player.y-camera.y)*gameZoom()+Math.sin(angle)*r;
       ctx.save();ctx.translate(ax,ay);ctx.rotate(angle);ctx.fillStyle='#ffb68f';ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(-6,-6);ctx.lineTo(-6,6);ctx.closePath();ctx.fill();ctx.restore();
     }
     const bw=Math.min(360,W-42),xx=(W-bw)/2,yy=Math.max(58,(document.getElementById('hud').getBoundingClientRect().bottom||72)+8);
@@ -2539,6 +2546,7 @@ function updateWildHUD(){
   if(mirrorSession){document.getElementById('run-score').textContent=tr('ЗЕРКАЛО','MIRROR');document.getElementById('expedition-status').textContent=tr('Секретная арена · твоё отражение','Secret arena · your reflection');document.getElementById('expedition-loot').textContent=tr('Копия сборки · без изменения основного забега','Build copy · expedition preserved');}
 }
 function syncWildUI(){
+  syncMobileSettings();
   syncMajorUI();
   syncDifficultyUI();
   const playing=state==='playing';
@@ -2553,7 +2561,7 @@ function syncWildUI(){
   document.getElementById('pause-btn').setAttribute('aria-label',tr('Пауза','Pause'));
   document.getElementById('dash-btn').setAttribute('aria-label',player?.survivalMode?tr('Рывок: три заряда','Dash: three charges'):tr('Рывок: 4 секунды перезарядки','Dash: 4 second cooldown'));
   const guide=document.getElementById('howto-body');
-  if(guide)guide.innerHTML=t('howtoBody')+'<br><br>'+tr('<b>Новые возможности:</b> WASD/стрелки — движение, Shift — рывок с неуязвимостью (перезарядка 4 сек), пробел — щит, Esc/P — пауза. На телефоне: джойстик и две кнопки справа. Светлый круг внутри клеща — зона попадания, лапки урон не получают.<br><br><b>Исследование:</b> 18 тайников: оранжевый — кровь и опыт, зелёный — 35% здоровья, фиолетовый — сбор всех выпавших капель и опыт. Тайники появляются на мини-карте вблизи клеща. Золотое кольцо — элитный враг: 3× здоровья, 3× крови, 2× опыта и лечебная капля (+18% HP).<br><br><b>Мутации:</b> 2 переброса за забег. В паузе видна текущая сборка. Прогресс сохраняется в браузере, незаконченный забег — каждые 5 секунд и при паузе. Экспортируй сохранение для переноса между устройствами.','<b>New controls:</b> WASD/arrows to move, Shift to dash with invulnerability (4s cooldown), Space for shield, Esc/P to pause. On touch: joystick and two buttons on the right. The light core circle is the hitbox; legs are decorative.<br><br><b>Explore:</b> 18 caches: orange gives blood and XP, green restores 35% HP, purple attracts all dropped blood and grants XP. Nearby caches appear on the minimap. A gold ring marks an elite: 3× HP, 3× blood, 2× XP and a healing drop (+18% HP).<br><br><b>Mutations:</b> 2 rerolls per run. View your build while paused. Browser saves persist progress; unfinished runs save every 5 seconds and on pause. Export saves to move between devices.');
+  if(guide)guide.innerHTML=t('howtoBody')+'<br><br>'+tr('<b>Новые возможности:</b> WASD/стрелки — движение, Shift — рывок с неуязвимостью (перезарядка 4 сек), пробел — щит, Esc/P — пауза. На телефоне: джойстик, выбор стороны щита и рывка перед стартом, кнопки −/+ для отдаления поля. Светлый круг внутри клеща — зона попадания, лапки урон не получают.<br><br><b>Исследование:</b> 18 тайников: оранжевый — кровь и опыт, зелёный — 35% здоровья, фиолетовый — сбор всех выпавших капель и опыт. Тайники появляются на мини-карте вблизи клеща. Золотое кольцо — элитный враг: 3× здоровья, 3× крови, 2× опыта и лечебная капля (+18% HP).<br><br><b>Мутации:</b> 2 переброса за забег. В паузе видна текущая сборка. Прогресс сохраняется в браузере, незаконченный забег — каждые 5 секунд и при паузе. Экспортируй сохранение для переноса между устройствами.','<b>New controls:</b> WASD/arrows to move, Shift to dash with invulnerability (4s cooldown), Space for shield, Esc/P to pause. On touch: joystick and two buttons on the right. The light core circle is the hitbox; legs are decorative.<br><br><b>Explore:</b> 18 caches: orange gives blood and XP, green restores 35% HP, purple attracts all dropped blood and grants XP. Nearby caches appear on the minimap. A gold ring marks an elite: 3× HP, 3× blood, 2× XP and a healing drop (+18% HP).<br><br><b>Mutations:</b> 2 rerolls per run. View your build while paused. Browser saves persist progress; unfinished runs save every 5 seconds and on pause. Export saves to move between devices.');
   guide.innerHTML+='<br><br>'+tr('<b>Сложность:</b> выбирается перед обычным забегом и режимом роя. Средний — базовый баланс текущей версии. Валюта, цены и постоянные улучшения общие для всех сложностей. Уже начатый забег сохраняет выбранную сложность; старые сохранения считаются средними.','<b>Difficulty:</b> choose before an expedition or swarm run. Normal uses the current baseline balance. Currency, prices and permanent upgrades are shared across difficulties. Saved runs keep their difficulty; older saves use Normal.');
   guide.innerHTML+='<br><br>'+tr('<b>Обновление 3.0:</b> кровавый импульс заряжается кровью и бьёт у ближайшей цели в пределах дальности шипов. Вязкий шип замедляет на 28% на 0.35с, затем у цели 2с иммунитета; на боссах замедление 12%. Две активные эволюции выбираются в атласе. До трёх предметов экипировки действуют из выбранного набора; его смена применяется сразу. Постройки на карте — события: шпиль, арена, лагерь и лавка. Личный рейтинг работает офлайн, общий — по кнопке публикации в итогах.','<b>Update 3.0:</b> blood pulse charges from blood and hits at the nearest target within spike range. Sticky spikes slow 28% for 0.35s, followed by 2s immunity; bosses slow 12%. Select two active evolutions in the atlas. Up to three equipped items apply immediately when you change the selected preset. Buildings mark events: spire, arena, camp and stall. Personal records work offline; publish to the community leaderboard from run results.');
   guide.innerHTML+='<br><br>'+tr('<b>Баланс 4.1:</b> редкий «Второй желудок» имеет 3 уровня: +20/40/60% крови. Все мутации и постоянные улучшения ограничены, уровень забега — максимум 50. Кровь за досрочное завершение и смерть сохраняется на 20%, слизь — полностью. После финального босса — 100% крови. В паузе и после босса есть кнопка завершения с расчётом выплаты. Статическое поле (E) и кислотное кольцо (Q) покупаются за слизь в экипировке или за кровь на рынке до конца забега.','<b>Balance 4.1:</b> rare Second Stomach has 3 ranks: +20/40/60% Blood. Mutations, permanent upgrades and run levels (50) are capped. Early exit or death banks 20% Blood and all Slime; after the final boss, 100% Blood. Review the payout from pause or between stages. Buy Static Field (E) and Acid Ring (Q) as permanent Slime gear or temporary run-market skills.');
@@ -2887,7 +2895,7 @@ function drawMajorWorld(){
  drawFields();
  for(const b of blastRings){ctx.save();ctx.globalAlpha=b.life/.45;ctx.strokeStyle=b.col;ctx.fillStyle=b.col+'20';ctx.lineWidth=3;ctx.beginPath();ctx.arc(b.x,b.y,b.radius*(1-b.life/.45),0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();}
  drawDashClouds();
- for(const c of mapEvents)if(!c.done&&Math.abs(c.x-player.x)<W/2+100&&Math.abs(c.y-player.y)<H/2+120)drawLandmark(c);
+ for(const c of mapEvents)if(!c.done&&c.x>camera.x-100&&c.x<camera.x+viewWidth()+100&&c.y>camera.y-120&&c.y<camera.y+viewHeight()+120)drawLandmark(c);
  if(evo('orbit'))for(let i=0;i<3;i++){const a=player.evoTimer*2+i*Math.PI*2/3;oval(player.x+Math.cos(a)*67,player.y+Math.sin(a)*67,5,9,'#ead9aa','#293e2e',1);}
 }
 function openAtlas(){majorReturnState=state==='paused'?'playing':state==='menu'?'playing':state;setState('atlas');renderAtlas();}
@@ -3714,7 +3722,7 @@ function openWeaponChoice(){chosenWeapon='spikes';setState('weapon');renderWeapo
 function renderWeaponChoice(){
  document.getElementById('weapon-title').textContent=tr('Стартовое оружие','Starting weapon');document.getElementById('weapon-intro').textContent=difficultyName(selectedDifficulty)+tr(' · выбери оружие на весь забег',' · choose a weapon for this run');const wrap=document.getElementById('weapon-options');wrap.innerHTML='';
  for(const w of weaponOptions()){const b=document.createElement('button');b.className='choice-card weapon-choice'+(chosenWeapon===w.id?' chosen':'');b.setAttribute('role','radio');b.setAttribute('aria-checked',String(chosenWeapon===w.id));b.innerHTML='<h3 style="color:'+ELEMENTS[w.type].color+'">'+ELEMENTS[w.type].icon+' '+tr(w.ru,w.en)+'</h3><p>'+tr(...w.desc)+'</p><small>'+tr(ELEMENTS[w.type].ru,ELEMENTS[w.type].en)+'</small>';b.onclick=()=>{chosenWeapon=w.id;renderWeaponChoice();};wrap.appendChild(b);}
- document.getElementById('weapon-start').textContent=tr('Начать забег','Start run');document.getElementById('weapon-back').textContent=tr('Назад','Back');
+ syncMobileSettings();document.getElementById('weapon-start').textContent=tr('Начать забег','Start run');document.getElementById('weapon-back').textContent=tr('Назад','Back');
 }
 function initCombatPlayer(p,profile=save){
  p.survivalMode=runDifficulty==='vmode';buildStats(p);if(p.survivalMode&&(p.baseUpgrades.extraLife||0)>0)p.vGuardReady=true;
@@ -4186,8 +4194,48 @@ function patronNote(){return '<aside class="patron-note" aria-label="Покро�
 function initializeFeedbackUI(){
  for(const [target,id]of [['#menu-screen .panel','feedback-menu'],['#paused-screen .panel','feedback-pause']]){const panel=document.querySelector(target);if(!panel)continue;panel.insertAdjacentHTML('afterbegin',patronNote()+'<button class="btn secondary small" id="'+id+'"></button>');const button=document.getElementById(id);button.textContent=tr('Обратная связь','Feedback');button.onclick=()=>{if(location.protocol==='file:'){toast(tr('Обратная связь доступна на сайте игры','Feedback is available on the game website'));return;}if(state==='playing')pauseRun();checkpoint();window.location.href='/feedback?version='+encodeURIComponent(GAME_VERSION);};}
 }
+var mobileUIReady=false;
+function isMobileUI(){return !!window.matchMedia?.('(pointer: coarse)')?.matches||(window.navigator?.maxTouchPoints||0)>0||W<=760;}
+function gameZoom(){return isMobileUI()?(save.mobile?.zoom||1):1;}
+function viewWidth(){return W/gameZoom();}
+function viewHeight(){return H/gameZoom();}
+function setMobilePreferences(side,zoom){
+ save.mobile={side:side==='left'?'left':'right',zoom:Math.round(Math.max(.6,Math.min(1,Number.isFinite(zoom)?zoom:1))*10)/10};
+ persistSave();syncMobileSettings();if(player&&['playing','paused'].includes(state))render();
+}
+function changeMobileZoom(delta){setMobilePreferences(save.mobile?.side,(save.mobile?.zoom||1)+delta);}
+function syncMobileSettings(){
+ if(!mobileUIReady)return;const mobile=isMobileUI(),side=save.mobile?.side||'right',zoom=save.mobile?.zoom||1;
+ document.body.classList.toggle('controls-left',mobile&&side==='left');
+ for(const place of ['start','pause']){
+  document.getElementById('mobile-settings-'+place).classList.toggle('hidden',!mobile);
+  document.getElementById('mobile-title-'+place).textContent=tr('Управление на телефоне','Phone controls');
+  document.getElementById('mobile-note-'+place).textContent=tr('С какой стороны удобнее нажимать щит и рывок? Движение — свободным джойстиком. Выбор запоминается.','Which side is more comfortable for shield and dash? Move with the floating joystick. Your choice is remembered.');
+  for(const value of ['left','right']){const b=document.getElementById('mobile-'+value+'-'+place);b.textContent=tr(value==='left'?'⬡ ➟ Слева':'Справа ⬡ ➟',value==='left'?'⬡ ➟ Left':'Right ⬡ ➟');b.setAttribute('aria-pressed',String(side===value));}
+  document.getElementById('mobile-zoom-label-'+place).textContent=tr('Масштаб поля: ','Field scale: ')+Math.round(zoom*100)+'%';
+  document.getElementById('mobile-out-'+place).textContent=tr('− Отдалить','− Zoom out');document.getElementById('mobile-in-'+place).textContent=tr('+ Приблизить','+ Zoom in');
+  document.getElementById('mobile-out-'+place).disabled=zoom<=.6;document.getElementById('mobile-in-'+place).disabled=zoom>=1;
+ }
+ const widget=document.getElementById('mobile-zoom');widget.classList.toggle('hidden',!mobile||state!=='playing');
+ widget.style.top=Math.max(96,(document.getElementById('hud').getBoundingClientRect().bottom||72)+52)+'px';
+ document.getElementById('mobile-zoom-value').textContent=Math.round(zoom*100)+'%';
+ document.getElementById('mobile-zoom-out').disabled=zoom<=.6;document.getElementById('mobile-zoom-in').disabled=zoom>=1;
+ document.getElementById('mobile-zoom-out').setAttribute('aria-label',tr('Отдалить игровое поле','Zoom out the field'));document.getElementById('mobile-zoom-in').setAttribute('aria-label',tr('Приблизить игровое поле','Zoom in the field'));
+}
+function initializeMobileUI(){
+ for(const [place,anchor,position]of [['start','weapon-intro','afterend'],['pause','pause-resume','beforebegin']]){
+  document.getElementById(anchor).insertAdjacentHTML(position,'<fieldset class="mobile-settings hidden" id="mobile-settings-'+place+'"><legend id="mobile-title-'+place+'"></legend><p id="mobile-note-'+place+'"></p><div class="mobile-options" role="group" aria-label="Shield and dash side"><button type="button" id="mobile-left-'+place+'"></button><button type="button" id="mobile-right-'+place+'"></button></div><p id="mobile-zoom-label-'+place+'"></p><div class="mobile-options"><button type="button" id="mobile-out-'+place+'"></button><button type="button" id="mobile-in-'+place+'"></button></div></fieldset>');
+  for(const side of ['left','right'])document.getElementById('mobile-'+side+'-'+place).onclick=()=>setMobilePreferences(side,save.mobile?.zoom||1);
+  document.getElementById('mobile-out-'+place).onclick=()=>changeMobileZoom(-.1);document.getElementById('mobile-in-'+place).onclick=()=>changeMobileZoom(.1);
+ }
+ document.body.insertAdjacentHTML('beforeend','<div id="mobile-zoom" class="hidden" role="group" aria-label="Масштаб игрового поля"><button type="button" id="mobile-zoom-out">−</button><span id="mobile-zoom-value" aria-live="polite">100%</span><button type="button" id="mobile-zoom-in">+</button></div>');
+ document.getElementById('mobile-zoom-out').onclick=()=>changeMobileZoom(-.1);document.getElementById('mobile-zoom-in').onclick=()=>changeMobileZoom(.1);
+ for(const id of ['mobile-zoom-out','mobile-zoom-in'])document.getElementById(id).addEventListener('pointerdown',e=>e.stopPropagation());
+ mobileUIReady=true;syncMobileSettings();
+}
+
 /* ========================================================================= BOOT */
-initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeLabUI();initializeFeedbackUI();runtimeReady=true;
+initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeLabUI();initializeFeedbackUI();initializeMobileUI();runtimeReady=true;
 copyPreviousProgress();
 loadSave().then(()=>{
   setState('menu');
