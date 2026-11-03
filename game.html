@@ -231,6 +231,7 @@ body.controls-left #shield-btn,body.controls-left #dash-btn{right:auto;left:calc
 #entry-code-training{margin:12px 0;padding:12px;border:1px solid #c7b48b;border-radius:10px;background:#efe2c0;color:#493929;font-size:13px;line-height:1.5}#entry-code-training a{display:block;margin-top:6px;color:#6a2e2d;font-weight:700;text-decoration:underline}
 .menu-tick{cursor:pointer}.menu-tick:focus-visible{outline:2px solid #d4af37}
  .legend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.legend-bug{padding:12px;border:1px solid #a38c62;border-radius:10px}.legend-bug canvas{float:left;margin:0 10px 6px 0;background:#23382b;border-radius:10px;width:80px;height:80px}.legend-bug p{clear:both;font-size:13px;line-height:1.5}
+body.secret-cosmetics #shield-btn{background:#08090b;color:#d9d9dc;border-color:#777983}body.secret-cosmetics #shield-btn.active{background:#030305;border-color:#d5c98d;box-shadow:0 0 18px 3px #14141c}body.secret-cosmetics #dash-btn{background:#594216;color:#ffdf78;border-color:#e1b74b}
 </style>
 </head>
 <body>
@@ -983,6 +984,7 @@ function scheduleNextBoss(){
   nextBossAt = elapsed + Math.max(60, 85 - bossEncounters*2);
 }
 function spawnBoss(keyOverride){
+  if(secretSession&&!secretSession.spawningWave)return false;
   const key = keyOverride||bossKeyForEncounter(bossEncounters);
   const lap = lapForEncounter(bossEncounters);
   const base = BOSS_DEFS[key];
@@ -1726,7 +1728,7 @@ function drawDrone(p){
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-6,-4,12,8,2) : ctx.rect(-6,-4,12,8);
   ctx.fill();
   // FPV camera lens
-  ctx.fillStyle=save.secretCosmetics?'#070709':'#7ec8ff';
+  ctx.fillStyle='#7ec8ff';
   ctx.beginPath(); ctx.arc(0,0,2.5,0,Math.PI*2); ctx.fill();
   // blinking LED
   if(Math.sin(performance.now()/150)>0.3){
@@ -1957,8 +1959,8 @@ function render(){
     ctx.globalAlpha = fading ? 0.15 : pulse;
     ctx.strokeStyle=save.secretCosmetics?'#070709':'#7ec8ff'; ctx.lineWidth=save.secretCosmetics?5:3;
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius*2.3, 0, Math.PI*2); ctx.stroke();
-    ctx.globalAlpha *= 0.18;
-    ctx.fillStyle='#7ec8ff';
+    ctx.globalAlpha *= save.secretCosmetics?.65:.18;
+    ctx.fillStyle=save.secretCosmetics?'#070709':'#7ec8ff';
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius*2.3, 0, Math.PI*2); ctx.fill();
     ctx.restore();
   }
@@ -1981,6 +1983,7 @@ function render(){
   drawScreenHUD();drawDraftOverlay();drawPressureOverlay();
 }
 function updateHUD(){
+  document.body.classList.toggle('secret-cosmetics',save.secretCosmetics===true);
   if(CHEATS.infiniteBlood)bloodThisRun=99999;
   document.getElementById('hp-bar-fill').style.width = Math.max(0,(player.hp/player.maxHp*100))+'%';
   document.getElementById('blood-count').textContent=formatCompact(bloodThisRun);
@@ -2235,7 +2238,7 @@ function drawTick(p){
   const stage=tickStageFor(p.level),scale=Math.min(1.3,stage.scale)*(1+Math.min(.18,bloodThisRun/1600));
   drawShadow(p.x,p.y,27*scale,19*scale);
   ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.facing+Math.PI/2);ctx.scale(scale,scale);
-  if(dashTimer>0&&!p.mirrorVisual){oval(0,12,21,29,'#bce9bc24',null);oval(0,23,16,23,'#bce9bc12',null);}
+  if(dashTimer>0&&!p.mirrorVisual){oval(0,12,21,29,save.secretCosmetics?'#ffd75a80':'#bce9bc24',null);oval(0,23,16,23,save.secretCosmetics?'#ffe99550':'#bce9bc12',null);}
   jointLegs(stage.legs,p.legPhase,19,29,'#b88252',2.5);
   const breathe=1+Math.sin(elapsed*3)*.018;
   oval(0,5,16*breathe,20*breathe,(isRadiant(p)?shellGradient(24,'#fff1a8','#d6ad45','#775923'):shellGradient(24,'#efab80','#b35251','#542c37')),'#322b29',2);
@@ -3255,7 +3258,7 @@ function updateDashClouds(dt){
  dashPuffClock-=dt;if(dashTimer>0&&dashPuffClock<=0){emitDashCloud(.55);dashPuffClock=.065;}
 }
 function drawDashClouds(){
- ctx.save();for(const c of dashClouds){const age=1-c.life/c.maxLife;ctx.globalAlpha=Math.max(0,c.life/c.maxLife)*.38;ctx.fillStyle=save.secretCosmetics?'#ffd75a':'#9bbf5f';ctx.beginPath();ctx.ellipse(c.x,c.y,c.r*(1+age*2),c.r*(.8+age*1.3),age,0,Math.PI*2);ctx.fill();ctx.globalAlpha*=.45;ctx.fillStyle='#d0df86';ctx.beginPath();ctx.arc(c.x-c.r*.2,c.y-c.r*.2,c.r*.55,0,Math.PI*2);ctx.fill();}ctx.restore();
+ ctx.save();for(const c of dashClouds){const age=1-c.life/c.maxLife;ctx.globalAlpha=Math.max(0,c.life/c.maxLife)*(save.secretCosmetics?.8:.38);ctx.fillStyle=save.secretCosmetics?'#ffd75a':'#9bbf5f';ctx.beginPath();ctx.ellipse(c.x,c.y,c.r*(1+age*2),c.r*(.8+age*1.3),age,0,Math.PI*2);ctx.fill();ctx.globalAlpha*=.45;ctx.fillStyle=save.secretCosmetics?'#fff1a0':'#d0df86';ctx.beginPath();ctx.arc(c.x-c.r*.2,c.y-c.r*.2,c.r*.55,0,Math.PI*2);ctx.fill();}ctx.restore();
 }
 function migrateWildRun(r){
  for(const k of ['counterReadyAt','counterSpeedUntil'])if(r.player[k]!==undefined&&(!Number.isFinite(r.player[k])||r.player[k]<0||r.player[k]>r.elapsed+6.01))throw Error('Invalid counter timer');
@@ -4666,13 +4669,14 @@ function nextSecretWave(){
  secretSession.wave++;const wave=secretSession.wave;fieldEncounter=wave-1;currentStageIdx=stageIndexForEncounter(fieldEncounter);announcedStageIdx=currentStageIdx;
  enemies=[];enemyField.invalidate();enemyProjectiles=[];playerProjectiles=[];playerRockets=[];hazards=[];fieldZones=[];orbs=[];orbField.invalidate();orbList=null;particles=[];texts=[];bossActive=null;
  player.x=WORLD.w/2;player.y=WORLD.h/2;player.hp=player.maxHp;player.invuln=3;player.shieldActiveTimer=0;player.shieldCooldown=0;player.staticCooldown=0;player.acidCooldown=0;player.dashCooldown=0;dashCooldown=0;player.dashCharges=player.survivalMode?3:1;player.dashRechargeLeft=0;
- const pool=Object.keys(BOSS_DEFS).filter(k=>k!==MIRROR_BOSS_KEY);
+ const pool=Object.keys(BOSS_DEFS).filter(k=>k!==MIRROR_BOSS_KEY);let bag=[];secretSession.spawningWave=true;
  for(let i=0;i<wave*3;i++){
-  const key=pool[Math.floor(Math.random()*pool.length)];spawnBoss(key);const e=bossActive,base=BOSS_DEFS[key],a=i*Math.PI*2/(wave*3),r=480+(i%3)*160;
+  if(!bag.length){bag=pool.slice();for(let j=bag.length-1;j>0;j--){const k=Math.floor(Math.random()*(j+1));[bag[j],bag[k]]=[bag[k],bag[j]];}}
+  const key=bag.pop();spawnBoss(key);const e=bossActive,base=BOSS_DEFS[key],a=i*Math.PI*2/(wave*3),r=480+(i%3)*160;
   e.x=player.x+Math.cos(a)*r;e.y=player.y+Math.sin(a)*r;e.secretSpawner=true;e.secretSummonTimer=3+(i%12)*.4;e.hp=e.maxHp=Math.max(100,Math.round(base.hp*difficulty().bossHp*(.55+.08*(wave-1))));e.dmg=base.dmg*difficulty().bossDmg*(1+.06*(wave-1));
   if(e.brain){e.brain.cycle=Math.floor(Math.random()*3);e.brain.timer=1.5+(i%8)*.35;}
  }
- enemyField.invalidate();bossActive=enemies[0];camera.x=player.x-viewWidth()/2;camera.y=player.y-viewHeight()/2;setState('playing');updateHUD();updateWildHUD();return true;
+ secretSession.spawningWave=false;enemyField.invalidate();bossActive=enemies[0];camera.x=player.x-viewWidth()/2;camera.y=player.y-viewHeight()/2;setState('playing');updateHUD();updateWildHUD();return true;
 }
 function killSecretSpawner(e){
  if(!secretSession||runEnded||e.dead)return;e.dead=true;e.hp=0;enemyField.remove(e);recordKill(e);killCount++;
@@ -4689,7 +4693,7 @@ function updateSecretMode(dt){
  if(CHEATS.noSpawn)return;
  const types=Object.keys(ENEMY_TYPES),budget=Math.min(220,difficulty().cap);
  for(const e of alive){if(!e.secretSpawner)continue;e.secretSummonTimer-=dt;if(e.secretSummonTimer>0)continue;e.secretSummonTimer=8+Math.random()*4;
-  let spawned=0;for(let i=0;i<10&&enemies.length<budget;i++){const a=Math.random()*Math.PI*2,x=Math.max(30,Math.min(WORLD.w-30,e.x+Math.cos(a)*95)),y=Math.max(30,Math.min(WORLD.h-30,e.y+Math.sin(a)*95));if(Math.hypot(x-player.x,y-player.y)<160)continue;
+  const owned=alive.filter(o=>o.summonerId===e.id).length;let spawned=0;for(let i=0;i<Math.min(10,Math.max(0,12-owned))&&enemies.length<budget;i++){const a=Math.random()*Math.PI*2,x=Math.max(30,Math.min(WORLD.w-30,e.x+Math.cos(a)*95)),y=Math.max(30,Math.min(WORLD.h-30,e.y+Math.sin(a)*95));if(Math.hypot(x-player.x,y-player.y)<160)continue;
    const before=enemies.length;spawnEnemy(types[Math.floor(Math.random()*types.length)],{x,y});if(enemies.length>before){enemies.at(-1).summonerId=e.id;spawned++;}
   }if(spawned)addFloatText(e.x,e.y-40,'✹','#d9b457',18);
  }
@@ -4697,7 +4701,7 @@ function updateSecretMode(dt){
 }
 function finishSecretMode(won,reason=''){
  if(!secretSession||secretSession.finished)return false;secretSession.finished=true;runEnded=true;
- if(won&&!CHEATS.godMode&&!CHEATS.oneShot&&!CHEATS.turbo){save.secretCosmetics=true;persistSave();}
+ if(won){save.secretCosmetics=true;persistSave();}
  setState('secretResult');document.getElementById('secret-result-title').textContent=won?tr('Вы получили доступ ко всему!','You have gained access to everything!'):tr('Испытание завершено','Challenge ended');
  document.getElementById('secret-result-info').textContent=won?'':reason+' · '+secretSession.wave+'/15';return true;
 }
