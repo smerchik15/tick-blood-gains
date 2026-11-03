@@ -728,7 +728,7 @@ let shakeTime=0, shakeMag=0;
 function screenShake(mag,dur){ shakeMag=Math.max(shakeMag,mag); shakeTime=Math.max(shakeTime,dur); }
 
 // debug / testing cheats — runtime-only, never persisted
-const CHEATS = { godMode:false, oneShot:false, turbo:false, noSpawn:false };
+const CHEATS = { godMode:false, oneShot:false, turbo:false, noSpawn:false, infiniteBlood:false };
 let cheatsOpen=false;
 
 // joystick state
@@ -936,6 +936,7 @@ function swarmPoolFor(t){
 }
 
 function spawnEnemy(typeKey, atPos){
+  if(typeKey==='leech'&&runDifficulty==='vmode')typeKey='ant';
   const base = ENEMY_TYPES[typeKey];if(!base)return false;
   if(ROLE_CAPS[typeKey]&&enemyField.population(typeKey)>=ROLE_CAPS[typeKey])return false;
   const d = difficultyMult(elapsed), floor = floorPower(isSwarmMode?0:fieldEncounter);
@@ -1322,6 +1323,7 @@ function update(dt){
   }
   player.x = Math.max(player.radius, Math.min(WORLD.w-player.radius, player.x));
   player.y = Math.max(player.radius, Math.min(WORLD.h-player.radius, player.y));
+  updateMovementRules(dt);updateAttachedDrain(dt);
 
   if(player.invuln>0) player.invuln -= dt;
   if(player.shieldCooldown>0) player.shieldCooldown=Math.max(0,player.shieldCooldown-dt);
@@ -1643,7 +1645,7 @@ function update(dt){
     enemyField.move(e);
     // contact damage
     const cdist = Math.hypot(player.x-e.x, player.y-e.y);
-    if(cdist < player.radius+e.radius && e.hitCooldown<=0 && !e.invulnerable&&!bossContactSafe(e)&&!(e.type==='slider'&&e.skillPhase==='recover')){
+    if(e.type!=='leech' && cdist < player.radius+e.radius && e.hitCooldown<=0 && !e.invulnerable&&!bossContactSafe(e)&&!(e.type==='slider'&&e.skillPhase==='recover')){
       if(e.skillPhase==='dash'&&(e.type==='rhino'||e.type==='wasp')){
         resolveIncomingHit(e.dmg*1.2,L(e.name)+' '+t('causeGotYou'),true,{mobility:true});
       }else if(e.dashState==='dashing'){
@@ -1746,6 +1748,7 @@ function drawCrawlerLegs(legCount, phase, spread, length, color){
   }
 }
 function drawEnemy(e){
+  if(e.type==='leech'){drawLeech(e);return;}
   if(e.bossKey===MIRROR_BOSS_KEY){drawMirrorBoss(e);return;}
   if(['colorado','slider'].includes(e.type)){drawNewBug(e);return;}
   if(e.bossKey==='dog_bliss'){drawDogHand(e);return;}
@@ -1945,7 +1948,7 @@ function render(){
     ctx.restore();
   }
   for(const e of enemies){ if(e.x>camera.x-260&&e.x<camera.x+viewWidth()+260&&e.y>camera.y-260&&e.y<camera.y+viewHeight()+260) drawEnemy(e); }
-  if(player) drawTick(player);
+  if(player){drawTick(player);}
   if(player && player.hasDrone) drawDrone(player);
   if(player && player.shieldActiveTimer>0){
     const pulse = 0.55+Math.sin(performance.now()/140)*0.2;
@@ -1978,6 +1981,7 @@ function render(){
   drawScreenHUD();drawDraftOverlay();drawPressureOverlay();
 }
 function updateHUD(){
+  if(CHEATS.infiniteBlood)bloodThisRun=99999;
   document.getElementById('hp-bar-fill').style.width = Math.max(0,(player.hp/player.maxHp*100))+'%';
   document.getElementById('blood-count').textContent=formatCompact(bloodThisRun);
   document.getElementById('slime-count').textContent = slimeThisRun;
@@ -2064,7 +2068,7 @@ function cheatJumpStage(idx){if(!allowCheatAction())return;
   bossEncounters = idx;
   nextBossAt = elapsed + 20;
 }
-function cheatToggle(key){if(!allowCheatAction())return; CHEATS[key]=!CHEATS[key]; buildCheatsUI(); }
+function cheatToggle(key){if(!allowCheatAction())return; CHEATS[key]=!CHEATS[key];if(CHEATS.infiniteBlood)bloodThisRun=99999; buildCheatsUI(); }
 function cheatResetSave(){if(!allowCheatAction())return; const keepLang=save.lang; save = JSON.parse(JSON.stringify(DEFAULT_SAVE)); save.lang=keepLang; persistSave(); refreshBankLabels(); buildCheatsUI(); }
 function cheatMaxMeta(){if(!allowCheatAction())return; META_UPGRADES.forEach(u=>{ save.upg[u.id]=u.cap||20; }); persistSave(); buildCheatsUI(); }
 function cheatGiveSlime(amt){if(!allowCheatAction())return; save.slimeBank+=amt; persistSave(); refreshBankLabels(); buildCheatsUI(); }
@@ -2074,7 +2078,7 @@ function buildCheatsUI(){
   if(!cheatsUnlocked)return;
   applyI18n();
   const toggles = [
-    ['godMode','tGodMode'], ['oneShot','tOneShot'], ['turbo','tTurbo'], ['noSpawn','tNoSpawn']
+    ['godMode','tGodMode'], ['oneShot','tOneShot'], ['turbo','tTurbo'], ['noSpawn','tNoSpawn'],['infiniteBlood','tInfiniteBlood']
   ];
   const toggleWrap = document.getElementById('cheat-toggles');
   toggleWrap.innerHTML='';
@@ -2136,6 +2140,7 @@ function buildCheatsUI(){
     b.onclick=fn;
     metaWrap.appendChild(b);
   });
+  addExpandedCheats();
 }
 
 /* ========================================================================= BUTTONS / NAV */
@@ -2226,6 +2231,7 @@ function jointLegs(pairs,phase,spread,length,color,width=2){
   }
 }
 function drawTick(p){
+  drawLegendaryWeapons(p);
   const stage=tickStageFor(p.level),scale=Math.min(1.3,stage.scale)*(1+Math.min(.18,bloodThisRun/1600));
   drawShadow(p.x,p.y,27*scale,19*scale);
   ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.facing+Math.PI/2);ctx.scale(scale,scale);
@@ -2237,6 +2243,7 @@ function drawTick(p){
   for(let i=0;i<4;i++){ctx.beginPath();ctx.ellipse(0,4+i*3,12-i,8,0,.16,Math.PI-.16);ctx.stroke();}
   oval(-6,-1,4.2,9,'#ffe3a92c',null);
   if(save.skin==='bow'){ctx.fillStyle='#ef77a9';ctx.strokeStyle='#772346';ctx.lineWidth=1.5;for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(side*13,-24);ctx.lineTo(side*14,-10);ctx.closePath();ctx.fill();ctx.stroke();}oval(0,-16,3,4,'#ffd3e5','#772346',1);}
+  drawWeatherCostume(p);
   // Scutum, mouthparts and sensory eyes.
   oval(0,-10,11,10,(isRadiant(p)?shellGradient(15,'#fff5b5','#c5a44f','#7d6227'):shellGradient(15,'#688272','#324e47','#21352f')),'#1d302a',2);
   ctx.strokeStyle='#a4b392';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,-18);ctx.lineTo(0,-5);ctx.moveTo(-6,-15);ctx.lineTo(-3,-5);ctx.moveTo(6,-15);ctx.lineTo(3,-5);ctx.stroke();
@@ -2460,7 +2467,7 @@ function syncWildUI(){
   document.getElementById('pause-btn').setAttribute('aria-label',tr('Пауза','Pause'));
   document.getElementById('dash-btn').setAttribute('aria-label',player?.survivalMode?tr('Рывок: три заряда','Dash: three charges'):tr('Рывок: 4 секунды перезарядки','Dash: 4 second cooldown'));
   const guide=document.getElementById('howto-body');
-  if(guide){guide.innerHTML='<button class="btn secondary" id="guide-legend">'+tr('Легенда','Legend')+'</button>'+playerGuide()+combatGuide()+survivalGuide();document.getElementById('guide-legend').onclick=()=>setState('legend');}
+  if(guide){guide.innerHTML='<button class="btn secondary" id="guide-legend">'+tr('Легенда','Legend')+'</button>'+playerGuide()+weatherGuide()+combatGuide()+survivalGuide();document.getElementById('guide-legend').onclick=()=>setState('legend');}
   if(state==='legend')renderLegend();
 }
 function updateStorageStatus(){
@@ -2478,6 +2485,7 @@ function snapshotRun(){
   return {v:2,journey:{v:3,floor:fieldEncounter,interval:ENDLESS_MOD_INTERVAL,powerRevision:JOURNEY_POWER_REVISION},extra:extraRunData(),economyVersion:4,balanceRevision:BALANCE_REVISION,economy:{migration:economyMigration,fieldZones,lastBossReward,slimeLedger},major:{stats:runStats,events:mapEvents,challenge,runId,ranked:rankedRun},difficulty:runDifficulty,player,enemies,orbs,playerProjectiles,enemyProjectiles,playerRockets,hazards,elapsed,spawnTimer,killCount,bloodThisRun,slimeThisRun,usedExtraLife,isSwarmMode,currentStageIdx,announcedStageIdx,pendingStageIdx,bossEncounters,nextBossAt,enemyIdCounter,bossId:bossActive?.id??null,caches,discoveries,elitesKilled,eliteClock,pendingLevels,rerolls,dashCooldown,runSeed,activeState,shopReturnState,mutationContext};
 }
 function checkpoint(){
+  if(CHEATS.infiniteBlood)bloodThisRun=99999;
   if(secretSession)return;
   if(mirrorSession)return;
   const data=snapshotRun();if(!data)return;
@@ -2529,7 +2537,7 @@ function validateRun(r,profile=save){
 }
 function restoreRun(){
   if(!resumeData)return;
-  const r=validateRun(resumeData);
+  const r=validateRun(resumeData);for(const key of ['idleAnchor','idleTime','idleDrain','idleNotice','shakeX','shakeDir','shakeTurns','shakeAt','leechDrainClock'])delete r.player[key];
   if(save.settlements.includes(r.major.runId)){resumeData=null;runEnded=true;setState('menu');toast(tr('Этот забег уже зачислен в банк','This run has already been banked'));return;}
   runDifficulty=r.difficulty;restoreMajorRun(r.major);economyMigration=r.economy?.migration||null;lastBossReward=r.economy?.lastBossReward||null;fieldZones=r.economy?.fieldZones||[];slimeLedger={...r.economy.slimeLedger};
   const defaults=newPlayer();player={...defaults};for(const k of Object.keys(defaults))if(r.player[k]!==undefined)player[k]=r.player[k];
@@ -2693,7 +2701,7 @@ const DAMAGE_NAMES={drone:'Дрон',spikes:'Шипы',splash:'Разрывны�
 let runStats,runId='',rankedRun=true,mapEvents=[],challenge=null,blastRings=[],lastRecord=null,majorReturnState='playing',activeMapEvent=null,leaderFilter='normal',leaderMode='expedition',recordsScope='local',leaderRequest=0;
 function esc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function normalizeLoadouts(raw,owned){
-  const ids=EQUIPMENT_DEFS.map(e=>e.id),legacy=ids.filter(id=>owned?.[id]);
+  const ids=EQUIPMENT_DEFS.filter(e=>!e.passive).map(e=>e.id),legacy=ids.filter(id=>owned?.[id]);
   if(!Array.isArray(raw))return [legacy.slice(0,3),[],[]];
   return [0,1,2].map(i=>Array.isArray(raw[i])?[...new Set(raw[i].filter(id=>ids.includes(id)&&owned?.[id]))].slice(0,3):[]);
 }
@@ -2796,7 +2804,7 @@ function openMapEvent(c){
  if(c.done||state!=='playing')return;
  activeMapEvent=c;majorReturnState='playing';setState('event');const box=document.getElementById('event-options');box.innerHTML='';
  const defs=[
-  {title:tr('Кровавый алтарь','Blood Shrine'),desc:tr('30 крови за выбор мутации. Если крови не хватает, вернись позже: алтарь останется на карте.','30 Blood for a mutation choice. Come back later if you cannot afford it; the shrine stays.'),cost:30,label:tr('30 крови → выбор мутации','30 Blood → mutation choice'),ok:()=>bloodThisRun>=30&&availableMutations().length>0,reason:bloodThisRun<30?tr('Не хватает крови: ','Need more Blood: ')+(30-bloodThisRun):tr('Доступных мутаций больше нет','No available mutations remain'),act:()=>{bloodThisRun-=30;runStats.spent+=30;showUpgradeChoices(t('bonusMutationTitle'),t('bonusMutationSubtitle'),'playing');}},
+  {title:tr('Кровавый алтарь','Blood Shrine'),desc:tr('30 крови за выбор мутации. Если крови не хватает, вернись позже: алтарь останется на карте.','30 Blood for a mutation choice. Come back later if you cannot afford it; the shrine stays.'),cost:30,label:tr('30 крови → выбор мутации','30 Blood → mutation choice'),ok:()=>bloodThisRun>=30&&availableMutations().length>0,reason:bloodThisRun<30?tr('Не хватает крови: ','Need more Blood: ')+(30-bloodThisRun):tr('Доступных мутаций больше нет','No available mutations remain'),act:()=>{if(!CHEATS.infiniteBlood)bloodThisRun-=30;runStats.spent+=30;showUpgradeChoices(t('bonusMutationTitle'),t('bonusMutationSubtitle'),'playing');}},
   {title:tr('Гнездо паразитов','Parasite Nest'),desc:tr('Четыре элитных противника. Победи всех и получи 90 крови и 12 опыта.','Four elite enemies. Defeat all for 90 Blood and 12 XP.'),label:tr('Начать испытание','Start the challenge'),ok:()=>!challenge&&difficulty().cap-enemies.filter(e=>!e.dead).length>=4,reason:tr('Для испытания нужно место для четырёх врагов. Вернись позже.','The challenge needs space for four enemies. Return later.'),act:()=>{const boost=player.lab.nest;player.lab.nest=false;const ids=[];for(let i=0;i<4;i++){const before=enemies.length;spawnEnemy(i%2?'beetle':'flea',{x:c.x+Math.cos(i*Math.PI/2)*110,y:c.y+Math.sin(i*Math.PI/2)*110});if(enemies.length>before){const e=enemies.at(-1);e.elite=true;e.hp*=boost?3.2:2;e.maxHp=e.hp;e.dmg*=boost?1.3:1.1;e.blood*=3;ids.push(e.id);}}challenge={ids,reward:boost?180:90};}},
   {title:tr('Тихий лагерь','Quiet Camp'),desc:player.survivalMode?tr('Вернуть все рывки и убрать до 4с КД щита (последние 2с остаются) или взять 20 крови.','Fill dash charges and remove up to 4s shield CD (last 2s remain), or take 20 Blood.'):tr('Восстанови 30% HP или возьми 20 крови.','Restore 30% HP or take 20 Blood.'),label:player.survivalMode?tr('Пополнить рывки и перезарядить щит','Refill dashes and recharge shield'):tr('Восстановить 30% HP','Restore 30% HP'),ok:()=>player.survivalMode?(player.dashCharges<3||player.shieldActiveTimer<=0&&player.shieldCooldown>2):player.hp<player.maxHp,reason:tr('Запас уже полон. Можно взять кровь или вернуться позже.','Resources are full. Take Blood or return later.'),act:()=>{if(!vSurvivalPickup('camp'))healPlayer(player.maxHp*.3);},alt:tr('Взять 20 крови','Take 20 Blood'),altAct:()=>{bloodThisRun+=20;}},
   {title:tr('Опасная сделка','Risky Bargain'),desc:player.survivalMode?tr('−8% скорости и +20% базового урона за сделку. Максимум две сделки; сохраняется при загрузке.','−8% speed and +20% base damage per bargain. Max two; persists on reload.'):tr('−15% максимального HP и +20% базового урона шипов. Эффект сохраняется при прокачке и загрузке.','−15% Max HP and +20% base spike damage. Persists through upgrades and reloads.'),label:tr('Заключить сделку','Accept bargain'),ok:()=>player.bargains<2,reason:tr('Предел: две сделки за забег.','Limit: two bargains per run.'),act:()=>{player.bargains++;buildStats(player);player.hp=Math.min(player.hp,player.maxHp);}}
@@ -2830,9 +2838,9 @@ function renderLoadouts(){
  const controls=document.createElement('div');controls.className='record-filters';
  for(let i=0;i<3;i++){const b=document.createElement('button');b.className='btn secondary small'+(save.activeLoadout===i?' selected':'');b.textContent=tr('Набор ','Loadout ')+(i+1)+' · '+save.loadouts[i].length+'/3';b.onclick=()=>selectLoadout(i);controls.appendChild(b);}intro.appendChild(controls);wrap.appendChild(intro);
  for(const item of EQUIPMENT_DEFS){const owned=save.equip[item.id],active=save.loadouts[save.activeLoadout].includes(item.id),card=document.createElement('div');card.className='tag';card.innerHTML='<h3>'+modIcon(item.id)+' '+L(item.name)+'</h3>'+(item.secret?'':'<p>'+L(item.desc)+'</p>')+'<div class="cost">'+(owned?tr('Куплено навсегда','Permanently owned'):'🫧 '+item.cost)+'</div>';
- const b=document.createElement('button');b.className='btn small '+(owned?'secondary':'');b.textContent=owned?(active?tr('Убрать из набора','Unequip'):tr('В набор','Equip')):tr('Купить','Buy');b.disabled=owned?(!active&&save.loadouts[save.activeLoadout].length>=3):save.slimeBank<item.cost;
+ const b=document.createElement('button');b.className='btn small '+(owned?'secondary':'');b.textContent=owned?(active?tr('Убрать из набора','Unequip'):tr('В набор','Equip')):tr('Купить','Buy');b.disabled=owned?(item.passive||(!active&&save.loadouts[save.activeLoadout].length>=3)):save.slimeBank<item.cost;if(owned&&item.passive)b.textContent=tr('Действует постоянно','Always active');
  let used=false;b.onclick=()=>{if(used)return;used=true;changeGearSelection(item.id);};card.appendChild(b);
- if(!owned){const hint=document.createElement('small');hint.textContent=tr('После покупки останется: ','Remaining after purchase: ')+(save.slimeBank>=item.cost?save.slimeBank-item.cost:tr('не хватает ','need ')+(item.cost-save.slimeBank))+tr(' слизи. Затем добавь предмет в набор.',' slime. Then equip the item.');card.appendChild(hint);}wrap.appendChild(card);
+ if(!owned){const hint=document.createElement('small');hint.textContent=tr('После покупки останется: ','Remaining after purchase: ')+(save.slimeBank>=item.cost?save.slimeBank-item.cost:tr('не хватает ','need ')+(item.cost-save.slimeBank))+(item.passive?tr(' слизи. Костюм действует сразу.',' slime. The suit works immediately.'):tr(' слизи. Затем добавь предмет в набор.',' slime. Then equip the item.'));card.appendChild(hint);}wrap.appendChild(card);
  }
 }
 function finishRecord(cause){
@@ -2982,7 +2990,7 @@ function renderBalancedMarket(){
  for(const o of MARKET_OFFERS){if(player.survivalMode&&o.id.startsWith('ward_'))continue;const n=player.marketBuys[o.id]||0,cost=o.baseCost+n*o.step,allowed=marketAllowed(o),card=document.createElement('div');card.className='tag';
  const after=Math.max(0,bloodThisRun-cost),bank=payoutFor(after,slimeThisRun,bossEncounters,isSwarmMode).blood;
  card.innerHTML='<h3>'+modIcon(o.id)+' '+L(o.name)+'</h3><p>'+L(o.desc)+'</p><div class="purchase-effect">'+(o.id.includes('Rental')?tr('Активная кнопка до конца забега','Active button until run end'):marketPreview(o.id))+'</div><small>'+tr('Куплено: ','Purchased: ')+n+(o.cap?'/'+o.cap:'')+'</small><div class="cost">🩸 '+formatCoins(cost)+'</div><small>'+tr('Остаток после покупки: ','Left after purchase: ')+formatCoins(after)+tr(' · выплата при выходе: ',' · payout on exit: ')+formatCoins(bank)+'</small>';
- const b=document.createElement('button');b.className='btn small';b.textContent=allowed?t('buy'):tr('Недоступно / максимум','Unavailable / maxed');b.disabled=!allowed||bloodThisRun<cost;b.onclick=()=>{if(!marketAllowed(o)||bloodThisRun<cost)return;bloodThisRun-=cost;runStats.spent+=cost;player.marketBuys[o.id]=(player.marketBuys[o.id]||0)+1;o.apply();gameAudio.play('buy');if(o.id!=='mutation')renderBalancedMarket();checkpoint();};card.appendChild(b);wrap.appendChild(card);
+ const b=document.createElement('button');b.className='btn small';b.textContent=allowed?t('buy'):tr('Недоступно / максимум','Unavailable / maxed');b.disabled=!allowed||bloodThisRun<cost;b.onclick=()=>{if(!marketAllowed(o)||bloodThisRun<cost)return;if(!CHEATS.infiniteBlood)bloodThisRun-=cost;runStats.spent+=cost;player.marketBuys[o.id]=(player.marketBuys[o.id]||0)+1;o.apply();gameAudio.play('buy');if(o.id!=='mutation')renderBalancedMarket();checkpoint();};card.appendChild(b);wrap.appendChild(card);
  }
  renderStoneOffer(wrap);renderCombatMarket(wrap);renderLabMarket(wrap);
  document.getElementById('stage-extract').textContent=tr('Завершить забег · расчёт выплаты','End run · review payout');
@@ -3163,6 +3171,7 @@ function enemyShot(e,angle,speed,scale=1,web=false){
  enemyProjectiles.push({x:e.x,y:e.y,sourceBoss:e.type==='boss',vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,radius:web?4:5,dmg:e.dmg*scale,life:2.8,noSlow:!web,slowFactor:.72,slowDuration:.7,cause:L(e.name)+tr(' · снаряд',' · projectile')});
 }
 function updateWildEnemy(e,dt,dx,dy,dist,slow){
+ if(e.type==='leech')return updateLeech(e,dt,dx,dy,dist,slow);
  if(e.type==='boss'){if(updateBossPressure(e,dt))return true;updateBossReinforcements(e,dt);}
  if(e.bossKey===MIRROR_BOSS_KEY){updateMirrorBoss(e,dt,dx,dy,dist,slow);return true;}
  if(e.type==='boss'&&!BOSS_PATTERNS[e.bossKey]&&e.bossKey!==MIRROR_BOSS_KEY)e.brain=null;
@@ -3335,7 +3344,7 @@ ICON_PATHS.chickenCannon='M3 15c0-5 4-8 9-6l3-5 2 4 4 1-3 3c4 6-1 10-7 9l-3 3v-4
 function gearEquipped(p,id){return Array.isArray(p?.equippedGear)&&p.equippedGear.includes(id);}
 function syncEquipment(p,profile=null,selected=false){
  const slots=selected&&profile?profile.loadouts[profile.activeLoadout]:p.equippedGear;
- p.equippedGear=[...new Set((slots||[]).filter(id=>EQUIPMENT_DEFS.some(e=>e.id===id)&&(!profile||profile.equip[id])))].slice(0,3);
+ p.equippedGear=[...new Set((slots||[]).filter(id=>EQUIPMENT_DEFS.some(e=>e.id===id&&!e.passive)&&(!profile||profile.equip[id])))].slice(0,3);
  p.vampiric=gearEquipped(p,'vampiric');p.dmgReduction=gearEquipped(p,'chitinPlate')?.85:1;
  for(const [key,id]of [['hasFlamethrower','flamethrower'],['hasZapper','zapper'],['hasRocket','rocket'],['hasDrone','drone'],['hasChickenCannon','chickenCannon']])p[key]=gearEquipped(p,id);
  p.hasStaticField=gearEquipped(p,'staticField')||(p.marketBuys.staticRental||0)>0;
@@ -3353,7 +3362,7 @@ function selectLoadout(index){if(![0,1,2].includes(index))return;save.activeLoad
 function changeGearSelection(id){
  const item=EQUIPMENT_DEFS.find(e=>e.id===id);if(!item)return false;
  if(!save.equip[id]){if(save.slimeBank<item.cost)return false;save.slimeBank-=item.cost;save.equip[id]=true;gameAudio.play('buy');}
- else{let slots=save.loadouts[save.activeLoadout];if(slots.includes(id))save.loadouts[save.activeLoadout]=slots.filter(x=>x!==id);else{if(slots.length>=3)return false;slots.push(id);}applySelectedLoadout();gameAudio.play('click');}
+ else{if(item.passive)return false;let slots=save.loadouts[save.activeLoadout];if(slots.includes(id))save.loadouts[save.activeLoadout]=slots.filter(x=>x!==id);else{if(slots.length>=3)return false;slots.push(id);}applySelectedLoadout();gameAudio.play('click');}
  persistSave();renderLoadouts();return true;
 }
 function loadoutSummary(){
@@ -3510,31 +3519,32 @@ function validateExtra(r){
  if(a.touch&&(!Number.isFinite(a.touch.x)||!Number.isFinite(a.touch.y)||Math.abs(Math.hypot(a.touch.x,a.touch.y)-1)>.01||!Number.isFinite(a.touch.mag)||a.touch.mag<=.05||a.touch.mag>1||a.touch.runId!==r.major.runId))throw Error('Invalid touch intent');
 }
 function restoreExtra(r){const a=r.extra;worldEvent=a?.event||null;eventClock=a?.eventClock??60;candyDrops=a?.candyDrops||[];seasonRun=a?.season||{month:monthKey(),theme:seasonalTheme(),picked:0,treats:0,tricks:0};trickTimer=a?.trickTimer||0;resetTouchContinuity();touchResume=a?.touch?{...a.touch,pointerId:null}:null;resumeGraceAt=a?.resumeGraceAt??-99;}
-function startWorldEvent(kind){
- if(!['hard','impossible','vmode'].includes(runDifficulty)||bossActive||worldEvent)return false;
- const kinds=['storm','heat','shake','shampoo','eye'];if(!kinds.includes(kind))kind=kinds[Math.floor(Math.random()*kinds.length)];
+function startWorldEvent(kind,force=false){
+ if((!force&&!['hard','impossible','vmode'].includes(runDifficulty))||bossActive||worldEvent)return false;
+ const kinds=['storm','heat','shake','shampoo','eye'].filter(k=>weatherAllowed(k,force));if(kind&&!kinds.includes(kind))return false;if(!kind)kind=kinds[Math.floor(Math.random()*kinds.length)];if(!kind)return false;
  const clampX=x=>Math.max(40,Math.min(WORLD.w-40,x)),clampY=y=>Math.max(40,Math.min(WORLD.h-40,y));
  const e={kind,life:kind==='eye'?19:18,warn:3,tick:0,phase:0,x:clampX(player.x+180),y:player.y,angle:Math.PI,zones:[]};
  if(kind==='heat'){e.zones.push({x:player.x,y:player.y,r:90});for(let i=0;i<3;i++){const an=i*2.1;e.zones.push({x:clampX(player.x+Math.cos(an)*220),y:clampY(player.y+Math.sin(an)*220),r:85});}}
  if(kind==='shampoo')for(let i=0,n=runDifficulty==='hard'?10:28;i<n;i++){const an=i*2.4,ring=100+Math.floor(i/7)*105;e.zones.push({x:clampX(player.x+Math.cos(an)*ring),y:clampY(player.y+Math.sin(an)*ring),r:runDifficulty==='hard'?55:65+i%3*8});}
  if(kind==='eye')e.angle=Math.atan2(player.y-e.y,player.x-e.x);
- worldEvent=e;gameAudio.play('field');toast(eventLabel(e)+tr(' · предупреждение 3с',' · 3s warning'));return true;
+ e.debug=force;worldEvent=e;gameAudio.play('field');toast(eventLabel(e)+tr(' · предупреждение 3с',' · 3s warning'));return true;
 }
-function eventLabel(e=worldEvent){return e?({storm:tr('Буря · скорость −20%','Storm · speed −20%'),heat:tr('Жара · спрячься в тени','Heat · take cover in shade'),shake:tr('Собака отряхивается','The dog shakes off water'),shampoo:tr('Шампунь · избегай луж','Shampoo · avoid puddles'),eye:tr('Осмотр хозяином · уйди из луча','Owner inspection · leave the beam')})[e.kind]:'';}
-function weatherDamage(kind){const n=runDifficulty==='impossible'?Math.max(0,fieldEncounter):0,m=1+.09*n+.0015*n*n;const base={storm:4,shake:6,heat:3,shampoo:10,eye:8}[kind],fraction={storm:.018,shake:.025,heat:.012,shampoo:.035,eye:.03}[kind];return (base+player.maxHp*fraction)*m;}
+function eventLabel(e=worldEvent){return e?({storm:tr('Буря · скорость −20%','Storm · speed −20%'),heat:tr('Жара · спрячься в тени','Heat · take cover in shade'),shake:tr('Отряхивание · держись чистых полос','Shake-off · stay in clear lanes'),shampoo:tr('Шампунь · избегай луж','Shampoo · avoid puddles'),eye:tr('Осмотр хозяином · уйди из луча','Owner inspection · leave the beam')})[e.kind]:'';}
+function weatherDamage(kind){const n=Math.max(0,fieldEncounter),m=1+(runDifficulty==='impossible'?.05:.02)*n;return player.maxHp*Math.min(.25,({storm:.035,shake:.04,heat:.02,shampoo:.06,eye:.05}[kind]||0)*m);}
 function updateWorldEvents(dt){
+ if(worldEvent&&!weatherAllowed(worldEvent.kind,worldEvent.debug))worldEvent=null;
  trickTimer=Math.max(0,trickTimer-dt);if(bossActive&&worldEvent)worldEvent.warn=Math.max(worldEvent.warn,2);
- if(!bossActive&&['hard','impossible','vmode'].includes(runDifficulty)){
+ if(!bossActive&&(worldEvent||['hard','impossible','vmode'].includes(runDifficulty))){
   if(!worldEvent){eventClock=Math.max(0,eventClock-dt);if(eventClock===0)startWorldEvent();}
   else{const e=worldEvent;e.life=Math.max(0,e.life-dt);e.warn=Math.max(0,e.warn-dt);
    if(e.warn===0){e.tick-=dt;e.phase+=dt;
     if(e.kind==='eye'){const target=Math.atan2(player.y-e.y,player.x-e.x),delta=Math.atan2(Math.sin(target-e.angle),Math.cos(target-e.angle));e.angle+=Math.max(-dt*.3,Math.min(dt*.3,delta));}
-    if(e.tick<=0){e.tick=e.kind==='shake'?.7:1.25;
-     if(e.kind==='shake'){screenShake(3,.17);const safe=Math.abs(Math.sin((player.x+player.y)*.012-e.phase*2))<.32;if(!safe)damagePlayer(weatherDamage('shake'),tr('Отряхивание','Shake-off'),{type:'physical',delivery:'area'});}
+    if(e.tick<=0){e.tick=['shake','heat'].includes(e.kind)?1.5:1.25;
+     if(e.kind==='shake'){screenShake(3,.17);const safe=Math.abs(Math.sin((player.x+player.y)*.012-e.phase*.6))<.55;if(!safe)damagePlayer(weatherDamage('shake'),tr('Отряхивание','Shake-off'),{type:'physical',delivery:'area'});}
      if(e.kind==='storm'&&Math.abs(Math.sin(player.x*.012+player.y*.008-e.phase))>.55)damagePlayer(weatherDamage('storm'),tr('Буря','Storm'),{type:'cold',delivery:'area'});
-     if(e.kind==='heat'&&!e.zones.some(z=>Math.hypot(player.x-z.x,player.y-z.y)<z.r-player.radius*.3))damagePlayer(weatherDamage('heat'),tr('Жара · лучистый ожог','Heat · radiant burn'));
+     if(e.kind==='heat'&&!save.equip.fireSuit&&!e.zones.some(z=>Math.hypot(player.x-z.x,player.y-z.y)<z.r-player.radius*.3))damagePlayer(weatherDamage('heat'),tr('Жара · лучистый ожог','Heat · radiant burn'));
      if(e.kind==='shampoo'&&e.zones.some(z=>Math.hypot(player.x-z.x,player.y-z.y)<z.r+player.radius*.4))damagePlayer(weatherDamage('shampoo'),tr('Шампунь','Shampoo'),{type:'chemical',delivery:'area'});
-     if(e.kind==='eye'&&e.phase%4>=2){const d=Math.hypot(player.x-e.x,player.y-e.y),a=Math.atan2(player.y-e.y,player.x-e.x);if(d<400&&Math.abs(Math.atan2(Math.sin(a-e.angle),Math.cos(a-e.angle)))<.32)damagePlayer(weatherDamage('eye'),tr('Пойман хозяином','Caught by the owner'));}
+     if(e.kind==='eye'&&!save.equip.assassinCloak&&e.phase%4>=2){const d=Math.hypot(player.x-e.x,player.y-e.y),a=Math.atan2(player.y-e.y,player.x-e.x);if(d<400&&Math.abs(Math.atan2(Math.sin(a-e.angle),Math.cos(a-e.angle)))<.32)damagePlayer(weatherDamage('eye'),tr('Пойман хозяином','Caught by the owner'));}
      if(state!=='playing')return;
     }
    }
@@ -3575,7 +3585,7 @@ function syncDraftUI(){syncMirrorUI();
  const collection=document.getElementById('stone-collection'),count=STONES.filter(s=>save.stones?.[s.id]).length;if(collection){collection.classList.toggle('hidden',!count);collection.innerHTML='<summary>'+tr('Коллекция камней ','Stone collection ')+count+'/5</summary>'+STONES.map(s=>'<p>'+difficultyName(s.id)+': '+(save.stones?.[s.id]?'◆ '+tr(s.ru,s.en):'◇ ???')+'</p>').join('');}
  const note=document.getElementById('monthly-note');if(note)note.textContent=seasonalTheme()?tr('Октябрь · Halloween: из жуков выпадают конфеты — сладость или гадость. Собрано за месяц: ','October · Halloween: bugs drop Trick or Treat candy. Collected this month: ')+(normalizeMonthly(save.monthly).collected):'';
 }
-function drawWeatherLanes(e){if(!['storm','shake'].includes(e.kind))return;const step=28;ctx.save();ctx.fillStyle=e.kind==='storm'?'#8ebbd839':'#d6b07842';for(let y=Math.max(0,Math.floor(camera.y/step)*step);y<Math.min(WORLD.h,camera.y+viewHeight()+step);y+=step)for(let x=Math.max(0,Math.floor(camera.x/step)*step);x<Math.min(WORLD.w,camera.x+viewWidth()+step);x+=step){const danger=e.kind==='shake'?Math.abs(Math.sin((x+14+y+14)*.012-e.phase*2))>=.32:Math.abs(Math.sin((x+14)*.012+(y+14)*.008-e.phase))>.55;if(danger)ctx.fillRect(x,y,step,step);}ctx.restore();}
+function drawWeatherLanes(e){if(!['storm','shake'].includes(e.kind))return;const step=28;ctx.save();ctx.fillStyle=e.kind==='storm'?'#8ebbd839':'#d6b07842';for(let y=Math.max(0,Math.floor(camera.y/step)*step);y<Math.min(WORLD.h,camera.y+viewHeight()+step);y+=step)for(let x=Math.max(0,Math.floor(camera.x/step)*step);x<Math.min(WORLD.w,camera.x+viewWidth()+step);x+=step){const danger=e.kind==='shake'?Math.abs(Math.sin((x+14+y+14)*.012-e.phase*.6))>=.55:Math.abs(Math.sin((x+14)*.012+(y+14)*.008-e.phase))>.55;if(danger)ctx.fillRect(x,y,step,step);}ctx.restore();}
 function drawDraftWorld(){
  if(worldEvent&&!bossActive)drawWeatherLanes(worldEvent);
  const e=worldEvent;if(e&&!bossActive){ctx.save();const warning=e.warn>0;
@@ -3676,7 +3686,7 @@ function radiantRadius(){return Math.min(420,280+15*(player.upgradeCounts.range|
 function vGuardCost(){return 25+8*player.level;}
 function buyVGuard(){
  if(runDifficulty!=='vmode'||!['paused','stageclear'].includes(state)||player.vGuardReady||player.vGuardLevels.includes(player.level)||bloodThisRun<vGuardCost())return false;
- const price=vGuardCost();bloodThisRun-=price;runStats.spent+=price;player.vGuardReady=true;player.vGuardLevels.push(player.level);gameAudio.play('buy');checkpoint();syncCombatUI();if(state==='stageclear')renderBalancedMarket();return true;
+ const price=vGuardCost();if(!CHEATS.infiniteBlood)bloodThisRun-=price;runStats.spent+=price;player.vGuardReady=true;player.vGuardLevels.push(player.level);gameAudio.play('buy');checkpoint();syncCombatUI();if(state==='stageclear')renderBalancedMarket();return true;
 }
 function syncCombatUI(){
  const b=document.getElementById('v-guard-buy');if(b){b.classList.toggle('hidden',runDifficulty!=='vmode'||!player);if(player){const used=player.vGuardLevels.includes(player.level);b.textContent=player.vGuardReady?tr('Защита: один удар готов','Protection: one hit ready'):used?tr('Защита уже куплена на этом уровне','Protection already purchased at this level'):tr('Защита от удара · 🩸 ','One-hit protection · 🩸 ')+vGuardCost();b.disabled=player.vGuardReady||used||bloodThisRun<vGuardCost();}}
@@ -3862,7 +3872,7 @@ function survivalPreview(id){
  if(id==='lifeOnKill')return pair(tr('Сокращение КД щита за убийство','Shield CD reduction per kill'),Math.min(.5,.1*n+(gearEquipped(player,'vampiric')?.15:0)+(evo('leech')?.15:0)),Math.min(.5,.1*(n+1)+(gearEquipped(player,'vampiric')?.15:0)+(evo('leech')?.15:0)));
  return '';
 }
-function survivalGuide(){return '<section id="rarity-guide"><h3>'+tr('Редкости и выживание','Rarity and survival')+'</h3><p>'+tr('Редкость мутации отмечена цветом: обычная — серая, необычная — зелёная, редкая — синяя, эпическая — фиолетовая. Выбирай по пользе для своей сборки. Взрывы сочетаются с пробитием и цепями, но не порождают новые взрывы. Взрывные железы и Длинная цепь требуют базовый мод. Блок прыжка или рывка щитом даёт +18% скорости на 5с, без суммирования; повторная награда через 6с.','Mutation rarity is color-coded: common is gray, uncommon green, rare blue and epic purple. Choose what benefits your build. Splash combines with pierce and chain; explosions never create more explosions. Volatile Glands and Long Chain require their base mod. Shield-blocking a hop or dash grants +18% speed for 5s, without stacking; reward cooldown 6s.')+'</p></section>'+'<section id="survival-guide"><h3>'+tr('Щит и выживание','Shield and survival')+'</h3><p>'+tr('Щит блокирует любой урон и новые боевые дебаффы: контакт, снаряды, зоны, яд и горение. При включении снимает уже наложенные яд, горение, замедление и сбой. Длительность / перезарядка после окончания: простой 5 / 9с; средний 4 / 10с; сложный 3 / 11с; невозможный 2.5 / 12.5с; V-Mode 2 / 14с. Перезарядка не идёт в меню.','Shield blocks all damage and new combat debuffs: contact, projectiles, areas, poison and burn. Activation clears existing poison, burn, slow and disruption. Duration / recharge after expiry: Easy 5 / 9s; Normal 4 / 10s; Hard 3 / 11s; Impossible 2.5 / 12.5s; V-Mode 2 / 14s. Menus pause recharge.')+'</p><p>'+tr('V-Mode: три рывка, заряды восстанавливаются по одному за 4.5с. После рывка остаётся 0.23с защиты; следующий рывок можно сделать после окончания предыдущего. Реген заменён ускорением восстановления рывка: −7% за ранг, постоянная Стойкость −1% за ранг; общий минимум 3.15с. HP-мутации усиливают длительность щита, броня сокращает его перезарядку, вампиризм сокращает её за убийства только вне активного щита. Последние 2с нельзя убрать убийствами. Хил-сферы убирают 1.25с восстановления рывка (при полном запасе дают 2 крови); лечебный тайник возвращает один заряд и сокращает КД щита на 2с, лагерь возвращает все заряды и убирает 4с КД щита. Сладость убирает 0.75с восстановления рывка, либо даёт 4 крови. В лавке вместо лечения — возврат одного заряда.','V-Mode: three dashes, recharged one at a time in 4.5s. Each dash leaves 0.23s protection; wait for the previous dash to end before dashing again. Regen becomes −7% dash recharge per rank, permanent Resilience −1% per rank; minimum 3.15s. Health mutations extend shield duration; armor shortens recharge; lifesteal shortens recharge on kills only while the shield is inactive. Kills cannot remove the last 2s. Healing orbs remove 1.25s dash recharge (or give 2 Blood when full); healing caches restore one charge and remove 2s shield recharge, camps fill all charges and remove 4s. Treats remove 0.75s dash recharge or give 4 Blood. The market restores a dash charge instead of healing.')+'</p><p>'+tr('Постоянная Живучесть в V-Mode: +0.02с щита за ранг. Второй шанс даёт на старте защиту от одного удара; это не возрождение. Купленная защита от удара остаётся отдельной страховкой, одна покупка за уровень персонажа. Вне защиты любой положительный урон по-прежнему смертелен.','Permanent Vitality in V-Mode: +0.02s shield per rank. Second Chance starts a run with one-hit protection, without reviving. Purchased one-hit protection remains separate, once per player level. Any positive damage taken outside protection is still fatal.')+'</p></section>';}
+function survivalGuide(){return '<section id="rarity-guide"><h3>'+tr('Редкости и выживание','Rarity and survival')+'</h3><p>'+tr('Редкость мутации отмечена цветом: обычная — серая, необычная — зелёная, редкая — синяя, эпическая — фиолетовая, легендарная — оранжевая. Выбирай по пользе для своей сборки. Взрывы сочетаются с пробитием и цепями, но не порождают новые взрывы. Взрывные железы и Длинная цепь требуют базовый мод. Блок прыжка или рывка щитом даёт +18% скорости на 5с, без суммирования; повторная награда через 6с.','Mutation rarity is color-coded: common is gray, uncommon green, rare blue, epic purple and legendary orange. Choose what benefits your build. Splash combines with pierce and chain; explosions never create more explosions. Volatile Glands and Long Chain require their base mod. Shield-blocking a hop or dash grants +18% speed for 5s, without stacking; reward cooldown 6s.')+'</p></section>'+'<section id="survival-guide"><h3>'+tr('Щит и выживание','Shield and survival')+'</h3><p>'+tr('Щит блокирует любой урон и новые боевые дебаффы: контакт, снаряды, зоны, яд и горение. При включении снимает уже наложенные яд, горение, замедление и сбой. Длительность / перезарядка после окончания: простой 5 / 9с; средний 4 / 10с; сложный 3 / 11с; невозможный 2.5 / 12.5с; V-Mode 2 / 14с. Перезарядка не идёт в меню.','Shield blocks all damage and new combat debuffs: contact, projectiles, areas, poison and burn. Activation clears existing poison, burn, slow and disruption. Duration / recharge after expiry: Easy 5 / 9s; Normal 4 / 10s; Hard 3 / 11s; Impossible 2.5 / 12.5s; V-Mode 2 / 14s. Menus pause recharge.')+'</p><p>'+tr('V-Mode: три рывка, заряды восстанавливаются по одному за 4.5с. После рывка остаётся 0.23с защиты; следующий рывок можно сделать после окончания предыдущего. Реген заменён ускорением восстановления рывка: −7% за ранг, постоянная Стойкость −1% за ранг; общий минимум 3.15с. HP-мутации усиливают длительность щита, броня сокращает его перезарядку, вампиризм сокращает её за убийства только вне активного щита. Последние 2с нельзя убрать убийствами. Хил-сферы убирают 1.25с восстановления рывка (при полном запасе дают 2 крови); лечебный тайник возвращает один заряд и сокращает КД щита на 2с, лагерь возвращает все заряды и убирает 4с КД щита. Сладость убирает 0.75с восстановления рывка, либо даёт 4 крови. В лавке вместо лечения — возврат одного заряда.','V-Mode: three dashes, recharged one at a time in 4.5s. Each dash leaves 0.23s protection; wait for the previous dash to end before dashing again. Regen becomes −7% dash recharge per rank, permanent Resilience −1% per rank; minimum 3.15s. Health mutations extend shield duration; armor shortens recharge; lifesteal shortens recharge on kills only while the shield is inactive. Kills cannot remove the last 2s. Healing orbs remove 1.25s dash recharge (or give 2 Blood when full); healing caches restore one charge and remove 2s shield recharge, camps fill all charges and remove 4s. Treats remove 0.75s dash recharge or give 4 Blood. The market restores a dash charge instead of healing.')+'</p><p>'+tr('Постоянная Живучесть в V-Mode: +0.02с щита за ранг. Второй шанс даёт на старте защиту от одного удара; это не возрождение. Купленная защита от удара остаётся отдельной страховкой, одна покупка за уровень персонажа. Вне защиты любой положительный урон по-прежнему смертелен.','Permanent Vitality in V-Mode: +0.02s shield per rank. Second Chance starts a run with one-hit protection, without reviving. Purchased one-hit protection remains separate, once per player level. Any positive damage taken outside protection is still fatal.')+'</p></section>';}
 var SURVIVAL_LABELS=new Map();
 function setSurvivalLabels(def,id,name,desc){const u=def.find(x=>x.id===id);SURVIVAL_LABELS.set(u.name,{ru:name[0],en:name[1]});SURVIVAL_LABELS.set(u.desc,{ru:desc[0],en:desc[1]});}
 setSurvivalLabels(RUN_UPGRADES,'regen',['Быстрый откат','Quick Recovery'],['−7% базового времени восстановления заряда рывка за ранг; 4 ранга.','−7% base dash recharge per rank; 4 ranks.']);
@@ -3948,7 +3958,7 @@ function copyPreviousProgress(){
 function gearPower(p){return .15+.85*Math.min(1,Object.entries(p.upgradeCounts).filter(([id])=>['fangs2','quickbite','heavy','crit','multishot','piercing','ricochet','explosive','burstUp','area','blastPower','chainReach'].includes(id)).reduce((n,[,v])=>n+v,0)/12);}
 function validateLab(a,time){if(a===undefined)return;if(!a||['spins','purchases','guard'].some(k=>!Number.isInteger(a[k])||a[k]<0||a[k]>100000)||a.guard>1||typeof a.nest!=='boolean'||typeof a.receipt!=='string'||a.receipt.length>500||['damageUntil','speedUntil'].some(k=>!Number.isFinite(a[k])||a[k]<0||a[k]>time+20.01))throw Error('Invalid experiment state');}
 function labCost(kind){return kind==='spin'?Math.min(1200,180+40*player.lab.spins):Math.round(({nest:90,guard:100,damage:150,speed:120,replace:120})[kind]*(1+.3*player.lab.purchases));}
-function labSpend(cost){if(!player||bloodThisRun<cost)return false;bloodThisRun-=cost;runStats.spent+=cost;rankedRun=false;return true;}
+function labSpend(cost){if(!player||bloodThisRun<cost)return false;if(!CHEATS.infiniteBlood)bloodThisRun-=cost;runStats.spent+=cost;rankedRun=false;return true;}
 function labBuy(kind){
  if(!['event','paused','stageclear'].includes(state)||!['nest','guard','damage','speed'].includes(kind))return false;
  const a=player.lab;if(kind==='nest'&&a.nest||kind==='guard'&&a.guard||kind==='damage'&&a.damageUntil>elapsed||kind==='speed'&&a.speedUntil>elapsed)return false;
@@ -4559,6 +4569,7 @@ function updateBuildProjectiles(dt){
 
 }
 function updateBuildAbilities(dt){
+ updateLegendaryWeapons(dt);
  for(const rk of playerRockets){
   const target=enemies.find(e=>e.id===rk.targetId&&!e.dead&&!e.invulnerable)||nearestEnemyEntries(rk.x,rk.y,Math.hypot(WORLD.w,WORLD.h),1)[0]?.e;
   if(target){rk.targetId=target.id;const dx=target.x-rk.x,dy=target.y-rk.y,d=Math.hypot(dx,dy)||1,turn=Math.min(1,dt*5);rk.vx+=(dx/d*160-rk.vx)*turn;rk.vy+=(dy/d*160-rk.vy)*turn;}
@@ -4632,7 +4643,7 @@ function renderLegend(){
  ['◉',tr('Метки опасности','Danger marks'),tr('Золотое кольцо — элитный враг с повышенной наградой. Линии и контуры на земле показывают готовящуюся атаку; лужи и погодные зоны опасны. DANGER обозначает особую атаку босса.','A gold ring marks an elite with better rewards. Ground lines and outlines telegraph attacks; pools and weather zones are hazardous. DANGER marks a boss special attack.')]
  ];
  document.getElementById('legend-body').innerHTML='<h2>'+tr('Добыча и обозначения','Loot and symbols')+'</h2>'+resources.map(([icon,title,body])=>'<section><h3>'+icon+' '+title+'</h3><p>'+body+'</p></section>').join('')+'<h2>'+tr('Встреченные жуки','Encountered bugs')+' · '+known.length+'/'+Object.keys(ENEMY_TYPES).length+'</h2><p>'+tr('Виды открываются, когда попадают в поле зрения. Неизвестные виды не раскрываются заранее.','Species unlock when they enter your view. Unknown species stay hidden.')+'</p><div class="legend-grid">'+known.map(key=>'<section class="legend-bug"><canvas id="legend-bug-'+key+'" width="96" height="96" aria-label="'+esc(L(ENEMY_TYPES[key].name))+'"></canvas><h3>'+esc(L(ENEMY_TYPES[key].name))+'</h3><p>'+tr(...LEGEND_BUGS[key])+'</p></section>').join('')+'</div>'+(known.length?'':'<p>'+tr('Пока никого не встретил. Начни забег — легенда будет пополняться.','No encounters yet. Start a run to fill the legend.')+'</p>');
- for(const key of known){const original=ctx;try{ctx=document.getElementById('legend-bug-'+key).getContext('2d');const e={...ENEMY_TYPES[key],type:key,x:48,y:48,radius:18,angle:0,legPhase:1,shieldAngle:0,skillPhase:'idle'};if(['colorado','slider'].includes(key))drawNewBug(e);else if(NEW_ENEMY_IDS.includes(key))drawWildEnemy(e);else drawOrganic(e);}finally{ctx=original;}}
+ for(const key of known){const original=ctx;try{ctx=document.getElementById('legend-bug-'+key).getContext('2d');const e={...ENEMY_TYPES[key],type:key,x:48,y:48,radius:18,angle:0,legPhase:1,shieldAngle:0,skillPhase:'idle'};if(key==='leech')drawLeech(e);else if(['colorado','slider'].includes(key))drawNewBug(e);else if(NEW_ENEMY_IDS.includes(key))drawWildEnemy(e);else drawOrganic(e);}finally{ctx=original;}}
 }
 function initializeLegend(){
  document.body.insertAdjacentHTML('beforeend','<div class="overlay hidden" id="legend-screen"><div class="panel" style="max-width:760px;text-align:left"><h1 class="title" id="legend-title"></h1><div id="legend-body"></div><button class="btn secondary" id="legend-back"></button></div></div>');
@@ -4698,6 +4709,71 @@ function initializeSecretMode(){
  document.getElementById('secret-close').insertAdjacentHTML('beforebegin','<button class="btn" id="secret-start" hidden>▶ Secret Mode</button>');document.getElementById('secret-start').onclick=startSecretMode;
  document.body.insertAdjacentHTML('beforeend','<div class="overlay hidden" id="secret-stage-screen"><div class="panel"><h1 class="title" id="secret-stage-title"></h1><button class="btn" id="secret-next">▶</button><button class="btn secondary" id="secret-stage-leave">×</button></div></div><div class="overlay hidden" id="secret-result-screen"><div class="panel"><h1 class="title" id="secret-result-title"></h1><p id="secret-result-info"></p><button class="btn" id="secret-return">↩</button></div></div>');
  screens.secretStage=document.getElementById('secret-stage-screen');screens.secretResult=document.getElementById('secret-result-screen');document.getElementById('secret-next').onclick=nextSecretWave;document.getElementById('secret-stage-leave').onclick=()=>finishSecretMode(false);document.getElementById('secret-return').onclick=leaveSecretMode;
+}
+
+
+/* Weather, movement and run-only legendary arsenal. */
+function weatherAllowed(kind,debug=false){return !(runDifficulty==='vmode'&&!['eye','shampoo'].includes(kind))&&!(!debug&&fieldEncounter<3&&['heat','shake'].includes(kind));}
+EQUIPMENT_DEFS.push(
+ {id:'assassinCloak',passive:true,cost:180,name:{ru:'Костюм маскировки',en:'Assassin Cloak'},desc:{ru:'Плащ убийцы. Постоянный иммунитет к осмотру хозяином, без боевого слота.',en:'Assassin cloak. Permanent immunity to owner inspection; no combat slot.'}},
+ {id:'fireSuit',passive:true,cost:150,name:{ru:'Костюм пожарника',en:'Firefighter Suit'},desc:{ru:'Брюшко жука-пожарника. Постоянный иммунитет к жаре, без боевого слота.',en:'Fire-colored beetle abdomen. Permanent heat immunity; no combat slot.'}}
+);
+for(const id of ['assassinCloak','fireSuit'])DEFAULT_SAVE.equip[id]=false;
+RARITIES.legendary={name:{ru:'ЛЕГЕНДАРНЫЙ',en:'LEGENDARY'},color:'#ff941f',weight:.4};
+for(const [id,ru,en,desc,eng]of [
+ ['scratchBlades','Царапкас','Tsarapkas','Три вращающихся клинка вокруг клеща. Урон зависит от силы оружия; только этот забег.','Three orbiting blades. Damage scales with weapon power; this run only.'],
+ ['cyclopsBeam','Ци Клоп','Qi Clops','Непрерывный луч перед клещом в направлении движения. Только этот забег.','A continuous beam facing your movement direction. This run only.']
+]){RUN_CAPS[id]=1;RUN_UPGRADES.push({id,name:{ru,en},desc:{ru:desc,en:eng},maxStacks:1,rarity:'legendary',apply:p=>{}});DAMAGE_NAMES[id]=ru;}
+ENEMY_TYPES.leech={name:{ru:'Белёсая пиявка',en:'Pale Leech'},hp:12,dmg:0,speed:62,radius:13,blood:3,xp:2,behavior:'leech'};
+ENEMY_TYPES.flea.dmg=2.7;KILL_VALUES.leech=10;BLOOD_BASE.leech=2;
+STAGES[1].pool=STAGES[1].pool.map(k=>k==='flea'?'leech':k);
+LEGEND_BUGS.leech=['Напрыгивает и присасывается. Потряси клещом влево-вправо несколько раз, чтобы сбросить.','Jumps and attaches. Move left and right several times to shake it off.'];
+Object.assign(UI.ru,{tInfiniteBlood:'Бесконечная кровь'});Object.assign(UI.en,{tInfiniteBlood:'Infinite Blood'});
+function updateMovementRules(dt){
+ if(CHEATS.infiniteBlood)bloodThisRun=99999;
+ const p=player;if(!p.idleAnchor)p.idleAnchor={x:p.x,y:p.y};
+ if(Math.hypot(p.x-p.idleAnchor.x,p.y-p.idleAnchor.y)>18){p.idleAnchor={x:p.x,y:p.y};p.idleTime=0;p.idleDrain=0;}else p.idleTime=(p.idleTime||0)+dt;
+ if(p.idleTime>9&&!CHEATS.infiniteBlood){p.idleDrain=(p.idleDrain||0)+20*dt;const loss=Math.floor(p.idleDrain);p.idleDrain-=loss;bloodThisRun=Math.max(0,bloodThisRun-loss);if((p.idleNotice||0)<elapsed){addFloatText(p.x,p.y-55,tr('Двигайся! −20 крови/с','Move! −20 Blood/s'),'#ed9b64',14);p.idleNotice=elapsed+2;}}
+ if(!Number.isFinite(p.shakeX))p.shakeX=p.x;const last=p.shakeX,delta=p.x-last;
+ if(Math.abs(delta)>=5){const dir=Math.sign(delta);if(p.shakeDir&&dir!==p.shakeDir){p.shakeTurns=(elapsed-(p.shakeAt||0)<1.5?(p.shakeTurns||0):0)+1;p.shakeAt=elapsed;}p.shakeDir=dir;p.shakeX=p.x;
+  if(p.shakeTurns>=4){p.shakeTurns=0;for(const e of enemies)if(e.type==='leech'&&e.attached&&!e.dead){e.attached=false;e.leechRest=2.5;e.x=p.x+(e.id%2?80:-80);e.y=p.y+35;enemyField.move(e);}addFloatText(p.x,p.y-45,tr('СБРОШЕНЫ','SHAKEN OFF'),'#dbe5c5',14);}
+ }
+}
+function updateAttachedDrain(dt){const count=enemies.filter(e=>!e.dead&&e.type==='leech'&&e.attached).length;if(!count){player.leechDrainClock=0;return;}player.leechDrainClock=(player.leechDrainClock||0)+dt;if(player.leechDrainClock>=1){player.leechDrainClock-=1;damagePlayer(count*(runDifficulty==='impossible'?2:1),tr('Присосавшиеся пиявки','Attached leeches'),{type:'chemical',delivery:'dot'});}}
+function updateLeech(e,dt,dx,dy,dist,slow){
+ if(e.attached){e.x=player.x+Math.cos(e.id*2.4)*14;e.y=player.y+Math.sin(e.id*2.4)*14;return true;}
+ e.leechRest=Math.max(0,(e.leechRest||0)-dt);e.leechLeap=Math.max(0,(e.leechLeap||0)-dt);
+ if(e.leechRest>0)return true;
+ if(e.leechLeap>0){e.x+=Math.cos(e.aimAngle)*260*slow*dt;e.y+=Math.sin(e.aimAngle)*260*slow*dt;
+  if(segmentDistance(player.x,player.y,e.x-Math.cos(e.aimAngle)*260*slow*dt,e.y-Math.sin(e.aimAngle)*260*slow*dt,e.x,e.y)<player.radius+e.radius){if(player.shieldActiveTimer>0||dashTimer>0||player.invuln>0){e.leechLeap=0;e.leechRest=1.3;}else{e.attached=true;e.drainTimer=1;}}return true;}
+ e.leechTimer=(e.leechTimer??1.2)-dt;if(e.leechTimer<=0&&dist<250){e.aimAngle=Math.atan2(dy,dx);e.leechLeap=.65;e.leechTimer=2.7;return true;}
+ e.x+=dx/dist*e.speed*slow*dt;e.y+=dy/dist*e.speed*slow*dt;return true;
+}
+function drawLeech(e){ctx.save();ctx.translate(e.x,e.y);ctx.rotate(e.attached?e.id:(e.aimAngle||e.angle||0));oval(0,0,18,7,'#e4e2cf','#797c68',1.5);for(let x=-10;x<14;x+=5)oval(x,0,1,5,'#a5ab96',null);oval(14,0,3,4,'#8c6567',null);ctx.restore();}
+function updateLegendaryWeapons(dt){
+ const p=player;p.legendaryClock=(p.legendaryClock||0)+dt;p.legendaryTick=(p.legendaryTick||0)+dt;if(p.legendaryTick<.1)return;const step=Math.min(.15,p.legendaryTick);p.legendaryTick=0;
+ const blades=p.upgradeCounts?.scratchBlades,beam=p.upgradeCounts?.cyclopsBeam;if(!blades&&!beam)return;
+ const range=beam?340:105,damage=p.spitDamage/p.attackInterval;
+ for(const e of enemiesNear(p.x,p.y,range,true)){if(e.dead)continue;const dx=e.x-p.x,dy=e.y-p.y,d=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
+  if(blades&&Math.abs(d-78)<e.radius+18&&Math.abs(Math.sin((angle-p.legendaryClock*2.8)*1.5))<.65)dealDamage(e,damage*1.1*step,'scratchBlades',{type:'physical',delivery:'area'});
+  const along=dx*Math.cos(p.facing)+dy*Math.sin(p.facing),across=Math.abs(dx*Math.sin(p.facing)-dy*Math.cos(p.facing));if(beam&&along>0&&along<340&&across<e.radius+10)dealDamage(e,damage*.7*step,'cyclopsBeam',{type:'radiant',delivery:'area'});
+ }
+}
+function drawLegendaryWeapons(p){ctx.save();if(p.upgradeCounts?.scratchBlades){ctx.strokeStyle='#ffbc55';ctx.lineWidth=5;for(let i=0;i<3;i++){const a=(p.legendaryClock||0)*2.8+i*Math.PI*2/3,x=p.x+Math.cos(a)*78,y=p.y+Math.sin(a)*78;ctx.beginPath();ctx.arc(x,y,15,a-.8,a+1);ctx.stroke();}}
+ if(p.upgradeCounts?.cyclopsBeam){const x=p.x+Math.cos(p.facing)*340,y=p.y+Math.sin(p.facing)*340;ctx.lineWidth=18;ctx.strokeStyle='#efb04460';ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(x,y);ctx.stroke();ctx.lineWidth=4;ctx.strokeStyle='#fff1ba';ctx.stroke();}ctx.restore();}
+function drawWeatherCostume(p){
+ if(save.equip.fireSuit){oval(0,7,16,20,shellGradient(24,'#ffad41','#d04b25','#642b25'),'#342a21',2);oval(0,3,5,16,'#292b26',null);}
+ if(save.equip.assassinCloak){ctx.fillStyle='#202a30';ctx.strokeStyle='#a3b5a6';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-11,-15);ctx.quadraticCurveTo(-27,8,-22,31);ctx.lineTo(0,24);ctx.lineTo(22,31);ctx.quadraticCurveTo(27,8,11,-15);ctx.closePath();ctx.fill();ctx.stroke();oval(0,-14,12,9,'#303e42','#73827d',1);}
+}
+function weatherGuide(){return '<section><h3>'+tr('Погода и движение','Weather and movement')+'</h3><p>'+tr('Перед погодой есть предупреждение. Жара обжигает вне круглых теней; отряхивание бьёт в отмеченных полосах — переходи в чистые промежутки. Эти два события начинаются с четвёртого участка. Буря замедляет и бьёт в подсвеченных зонах; шампунь оставляет опасные лужи. Взгляд хозяина медленно следит за клещом: выйди из луча до осмотра. Урон погоды зависит от максимального HP и усиливается на дальних участках. В V-Mode бывают только взгляд и шампунь.','Weather is warned in advance. Heat burns outside round shade zones; shake-off hits marked lanes, so move to clear gaps. These two events begin on stage four. Storms slow you and hurt in marked zones; shampoo creates hazardous pools. The owner’s gaze slowly tracks you: leave the beam before inspection. Weather damage scales with max HP and later stages. V-Mode only has gaze and shampoo.')+'</p><p>'+tr('Костюм маскировки защищает от взгляда, костюм пожарника — от жары. Оба покупаются за слизь и действуют постоянно. Если стоять без заметного движения больше 9 секунд, кровь забега убывает на 20 в секунду. Двигайся, чтобы остановить потерю.','The Assassin Cloak prevents gaze damage; the Firefighter Suit prevents heat damage. Both are permanent Slime purchases. Staying still for over 9 seconds drains 20 run Blood per second. Move to stop the drain.')+'</p></section>';}
+function addExpandedCheats(){
+ if(!cheatsUnlocked)return;const wrap=document.getElementById('cheat-run-actions');
+ const add=(label,fn)=>{const b=document.createElement('button');b.className='cheat-btn';b.textContent=label;b.disabled=!player||runEnded;b.onclick=()=>{if(!allowCheatAction()||!player||runEnded)return;fn();};wrap.appendChild(b);};
+ for(const kind of ['storm','heat','shake','shampoo','eye'])add(tr('Погода: ','Weather: ')+eventLabel({kind}),()=>{closeCheats();if(state==='paused')resumeRun();worldEvent=null;startWorldEvent(kind,true);});
+ add(tr('Убрать погоду','Clear weather'),()=>{worldEvent=null;});
+ for(const [key,def]of Object.entries(ENEMY_TYPES))add('+ '+L(def.name),()=>{spawnEnemy(key,{x:Math.min(WORLD.w-30,player.x+220),y:player.y});});
+ for(const id of ['scratchBlades','cyclopsBeam'])add('+ '+L(RUN_UPGRADES.find(u=>u.id===id).name),()=>grantUpgrade(id));
+ add(tr('Полное здоровье','Full health'),()=>{player.hp=player.maxHp;});add(tr('Сбросить КД','Reset cooldowns'),()=>{player.shieldCooldown=0;dashCooldown=0;player.dashCharges=3;player.staticCooldown=0;player.acidCooldown=0;});
 }
 
 /* ========================================================================= BOOT */
