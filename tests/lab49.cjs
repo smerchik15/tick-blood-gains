@@ -8,7 +8,7 @@ a.startRun('impossible');const base=a.get().player.spitDamage/a.get().player.att
 for(const [k,v]of Object.entries(a.META_CAPS))a.save.upg[k]=v;
 a.startRun('impossible');let p=a.get().player;const max=p.spitDamage/p.attackInterval;assert(max/base<=4/3);assert.equal(a.gearPower(p),.15);assert(p.maxHp<=40);assert(p.speed<=150);assert(p.regen<=.1);
 for(const id of ['fangs2','quickbite','heavy','multishot'])for(let i=0;i<3;i++)a.grantUpgrade(id);assert.equal(a.gearPower(p),1);
-const counts={};for(let i=0;i<1000000;i++){const k=a.gambinoOutcome((i+.5)/1000000);counts[k]=(counts[k]||0)+1;}assert.deepEqual(counts,{hint:100,gear:1000,guard:20000,damage:15000,speed:13900,half:130000,quarter:80000,jackpot:10000,loss:730000});
+const counts={};for(let i=0;i<1000000;i++){const k=a.gambinoOutcome((i+.5)/1000000);counts[k]=(counts[k]||0)+1;}assert.deepEqual(counts,{hint:100,gear:1000,guard:20000,damage:15000,speed:13900,half:130000,quarter:80000,jackpot:10000,decoy:10000,loss:720000});
 a.startRun();a.money(10000);a.openGambino();const random=sandbox.Math.random;
 for(const [roll,result,mult]of [[.9,'loss',0],[.1,'half',.5],[.2,'quarter',.25],[.265,'jackpot',10]]){const before=a.get().bloodThisRun,cost=a.labCost('spin');sandbox.Math.random=()=>roll;assert.equal(a.spinGambino(),result);assert.equal(a.get().bloodThisRun,before-cost+Math.floor(cost*mult));}sandbox.Math.random=random;
 const before=a.get().bloodThisRun;a.setState('playing');assert.equal(a.spinGambino(),false);assert.equal(a.get().bloodThisRun,before);

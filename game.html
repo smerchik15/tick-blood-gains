@@ -414,7 +414,7 @@ const ACHIEVEMENTS=[
  {id:'stones',ru:'Пять камней в брюшке',en:'Five Stones in the Belly',desc:'Собрать все пять камней',eng:'Collect all five stones'},
  {id:'mirror',ru:'Самая опасная самка',en:'The Deadliest Female',desc:'Победить своё отражение и получить облик с бантиком',eng:'Defeat your reflection and earn the bow skin'}
 ];
-const DEFAULT_SAVE = { seenEnemies:{}, bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,achievements:{},bowSkin:false,skin:'default',monthly:null,audio:{enabled:true,volume:.35},mobile:{side:"right",zoom:1},
+const DEFAULT_SAVE = { secretCosmetics:false, seenEnemies:{}, bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,achievements:{},bowSkin:false,skin:'default',monthly:null,audio:{enabled:true,volume:.35},mobile:{side:"right",zoom:1},
   upg:{vitality:0,fangs:0,swiftness:0,appetite:0,scent:0,resilience:0,extraLife:0,bloodPressure:0},
   equip:{magnetCollar:false, chitinPlate:false, vampiric:false, flamethrower:false, zapper:false, rocket:false, drone:false,staticField:false,acidField:false,chickenCannon:false}
 };
@@ -427,6 +427,7 @@ function normalizeSave(raw){
     if(raw[k]!==undefined && (!Number.isFinite(raw[k]) || raw[k]<0 || raw[k]>1e12)) throw Error('Invalid currency');
     out[k]=Math.floor(raw[k]||0);
   }
+  out.secretCosmetics=raw.secretCosmetics===true;
   out.seenEnemies=Object.fromEntries(Object.entries(raw.seenEnemies||{}).filter(([k,v])=>/^[a-z_]{1,32}$/.test(k)&&v===true).slice(0,64));
   out.lang=raw.lang==='en'?'en':'ru';out.mobile={side:raw.mobile?.side==='left'?'left':'right',zoom:Number.isFinite(raw.mobile?.zoom)?Math.round(Math.max(.6,Math.min(1,raw.mobile.zoom))*10)/10:1};
   out.stones=Object.fromEntries(STONES.map(s=>[s.id,raw.stones?.[s.id]===true]));out.secretMode=raw.secretMode===true&&STONES.every(s=>out.stones[s.id]);out.monthly=normalizeMonthly(raw.monthly);
@@ -820,6 +821,7 @@ const cheatsScreen = document.getElementById('cheats-screen');
 const HUB_STATES = ['menu','howto','shop','equipment'];
 
 function setState(s){
+  if(secretSession&&!secretSession.finished){if(s==='menu'){finishSecretMode(false,tr('Бой прерван','Fight abandoned'));return;}if(['shop','equipment','settlement'].includes(s))return;}
   if(mirrorSession&&!mirrorSession.finished){if(s==='menu'){finishMirrorArena(false,tr('Бой прерван','Fight abandoned'));return;}if(['shop','equipment','settlement'].includes(s))return;}
   preserveTouchBeforeState(s);state = s;
   endJoystick(); keys.clear();
@@ -979,8 +981,8 @@ function scheduleNextBoss(){
   // bosses arrive a little sooner as the run goes on, floor so it never gets silly-frequent
   nextBossAt = elapsed + Math.max(60, 85 - bossEncounters*2);
 }
-function spawnBoss(){
-  const key = bossKeyForEncounter(bossEncounters);
+function spawnBoss(keyOverride){
+  const key = keyOverride||bossKeyForEncounter(bossEncounters);
   const lap = lapForEncounter(bossEncounters);
   const base = BOSS_DEFS[key];
   const pos = edgeSpawnPoint();
@@ -1012,7 +1014,7 @@ function spawnBoss(){
   };
   initBossBrain(bossActive);stampNewEnemy(bossActive);initBossPressure(bossActive);enemies.push(bossActive);enemyField.add(bossActive);
   const tag = lap>0 && key!=='danys_mom' ? ' — Lap '+(lap+1) : '';
-  addFloatText(player.x, player.y-100, "⚠️ "+L(base.name)+tag+" ⚠️", '#ff5064', 25);
+  if(!secretSession)addFloatText(player.x, player.y-100, "⚠️ "+L(base.name)+tag+" ⚠️", '#ff5064', 25);
 }
 
 /* ========================================================================= ORBS / PARTICLES */
@@ -1092,6 +1094,7 @@ function findBounceTarget(pr, fromEnemy){
   return best;
 }
 function killEnemy(e){
+ if(secretSession&&e.secretSpawner){killSecretSpawner(e);return;}
  if(e.mirrorTarget)return;
   if(runEnded||e.dead) return;
   if(mirrorSession&&e.bossKey===MIRROR_BOSS_KEY){const p=e.mirrorBuild;if(!e.mirrorExtraLife&&!p.survivalMode&&(p.baseUpgrades.extraLife||0)>0){e.mirrorExtraLife=true;e.hp=e.maxHp*.5;p.hp=e.hp;p.invuln=1.5;return;}e.dead=true;e.hp=0;finishMirrorArena(true);return;}
@@ -1168,6 +1171,7 @@ function pressShield(){
   checkpoint();
 }
 function endRun(cause){
+ if(secretSession){finishSecretMode(false,cause);return;}
  if(mirrorSession){finishMirrorArena(false,cause);return;}
  if(runEnded)return;
  if(save.settlements.includes(runId)){runEnded=true;resumeData=null;setState('menu');return;}
@@ -1264,6 +1268,7 @@ function openBonusMutation(){
 /* ========================================================================= UPDATE */
 function update(dt){
   if(state!=='playing'||cheatsOpen)return;
+  if(secretSession){updateSecretMode(dt);if(state!=='playing')return;}
   enemyField.ensure();
   elapsed += dt;
   if(Math.floor(elapsed)!==Math.floor(elapsed-dt))checkAchievements();
@@ -1719,7 +1724,7 @@ function drawDrone(p){
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-6,-4,12,8,2) : ctx.rect(-6,-4,12,8);
   ctx.fill();
   // FPV camera lens
-  ctx.fillStyle='#7ec8ff';
+  ctx.fillStyle=save.secretCosmetics?'#070709':'#7ec8ff';
   ctx.beginPath(); ctx.arc(0,0,2.5,0,Math.PI*2); ctx.fill();
   // blinking LED
   if(Math.sin(performance.now()/150)>0.3){
@@ -1947,7 +1952,7 @@ function render(){
     const fading = player.shieldActiveTimer<1 && Math.sin(performance.now()/70)>0; // flicker warning in the last second
     ctx.save();
     ctx.globalAlpha = fading ? 0.15 : pulse;
-    ctx.strokeStyle='#7ec8ff'; ctx.lineWidth=3;
+    ctx.strokeStyle=save.secretCosmetics?'#070709':'#7ec8ff'; ctx.lineWidth=save.secretCosmetics?5:3;
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius*2.3, 0, Math.PI*2); ctx.stroke();
     ctx.globalAlpha *= 0.18;
     ctx.fillStyle='#7ec8ff';
@@ -2342,7 +2347,7 @@ function initExpedition(){
   }
 }
 function updateExpedition(dt){
-  updateDashCharges(dt);if(mirrorSession)return;
+  updateDashCharges(dt);if(mirrorSession||secretSession)return;
   eliteClock-=dt;
   if(eliteClock<=0&&!bossActive&&!CHEATS.noSpawn&&enemies.length<difficulty().cap-5){
     eliteClock=Math.max(24,40-elapsed/80)*difficulty().eliteInterval;
@@ -2439,6 +2444,7 @@ function updateWildHUD(){
   if(mirrorSession){document.getElementById('run-score').textContent=tr('ЗЕРКАЛО','MIRROR');document.getElementById('expedition-status').textContent=tr('Секретная арена · твоё отражение','Secret arena · your reflection');document.getElementById('expedition-loot').textContent=tr('Копия сборки · без изменения основного забега','Build copy · expedition preserved');}
 }
 function syncWildUI(){
+  if(secretSession){document.getElementById('expedition-status').textContent='Secret Mode · '+secretSession.wave+'/15';document.getElementById('run-score').textContent='Secret Mode';return;}
   syncMobileSettings();
   syncMajorUI();
   syncDifficultyUI();
@@ -2464,6 +2470,7 @@ function updateStorageStatus(){
 function toast(message){const el=document.getElementById('save-toast');el.textContent=message;el.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.add('hidden'),3500);}
 // All runtime fields are JSON data; the boss is restored by id, never duplicated.
 function snapshotRun(){
+  if(secretSession)return secretSession.original;
   if(mirrorSession)return mirrorSession.original;
   if(!player||runEnded)return null;
   const activeState=['atlas','records','event','settlement'].includes(state)?majorReturnState:state==='paused'?pausedFrom:state;
@@ -2471,6 +2478,7 @@ function snapshotRun(){
   return {v:2,journey:{v:3,floor:fieldEncounter,interval:ENDLESS_MOD_INTERVAL,powerRevision:JOURNEY_POWER_REVISION},extra:extraRunData(),economyVersion:4,balanceRevision:BALANCE_REVISION,economy:{migration:economyMigration,fieldZones,lastBossReward,slimeLedger},major:{stats:runStats,events:mapEvents,challenge,runId,ranked:rankedRun},difficulty:runDifficulty,player,enemies,orbs,playerProjectiles,enemyProjectiles,playerRockets,hazards,elapsed,spawnTimer,killCount,bloodThisRun,slimeThisRun,usedExtraLife,isSwarmMode,currentStageIdx,announcedStageIdx,pendingStageIdx,bossEncounters,nextBossAt,enemyIdCounter,bossId:bossActive?.id??null,caches,discoveries,elitesKilled,eliteClock,pendingLevels,rerolls,dashCooldown,runSeed,activeState,shopReturnState,mutationContext};
 }
 function checkpoint(){
+  if(secretSession)return;
   if(mirrorSession)return;
   const data=snapshotRun();if(!data)return;
   try{const json=JSON.stringify(data);localStorage.setItem(RUN_KEY,json);resumeData=JSON.parse(json);storageOK=true;}catch(e){storageOK=false;}
@@ -2960,7 +2968,7 @@ function economyPauseText(){
  if(economyMigration)text+=' '+tr('Пересчёт старого забега: ','Legacy run rebalance: ')+formatCoins(economyMigration.before)+' → '+formatCoins(economyMigration.after)+tr(' крови; мод жадности ',' blood; Greed ')+economyMigration.greedBefore+' → '+economyMigration.greedAfter+'.';
  return text;
 }
-function openSettlement(){if(mirrorSession){finishMirrorArena(false,tr('Бой прерван','Fight abandoned'));return;}
+function openSettlement(){if(secretSession){finishSecretMode(false,tr('Бой прерван','Fight abandoned'));return;}if(mirrorSession){finishMirrorArena(false,tr('Бой прерван','Fight abandoned'));return;}
  if(!player||runEnded)return;settlementReturnState=state;majorReturnState=state==='stageclear'?'stageclear':'playing';setState('settlement');const p=payoutFor(bloodThisRun,slimeThisRun,bossEncounters,isSwarmMode);
  document.getElementById('settlement-title').textContent=tr('Завершить забег?','End this run?');
  document.getElementById('settlement-preview').textContent=tr('Сейчас в забеге: ','Current run blood: ')+formatCoins(bloodThisRun)+'. '+tr('В банк поступит: ','Bank credit: ')+formatCoins(p.blood)+' ('+Math.round(p.rate*100)+'%). '+tr('Сгорит: ','Lost: ')+formatCoins(p.lost)+'. '+tr('Слизь: +','Slime: +')+p.slime+'. '+tr('После победы над финальным боссом сохраняется 100% крови. Просто сохранить забег и выйти в меню можно без потерь — но без зачисления в банк.','After defeating the final boss, 100% of blood is kept. Saving and returning to the menu keeps the run intact, without banking it.');
@@ -3237,7 +3245,7 @@ function updateDashClouds(dt){
  dashPuffClock-=dt;if(dashTimer>0&&dashPuffClock<=0){emitDashCloud(.55);dashPuffClock=.065;}
 }
 function drawDashClouds(){
- ctx.save();for(const c of dashClouds){const age=1-c.life/c.maxLife;ctx.globalAlpha=Math.max(0,c.life/c.maxLife)*.38;ctx.fillStyle='#9bbf5f';ctx.beginPath();ctx.ellipse(c.x,c.y,c.r*(1+age*2),c.r*(.8+age*1.3),age,0,Math.PI*2);ctx.fill();ctx.globalAlpha*=.45;ctx.fillStyle='#d0df86';ctx.beginPath();ctx.arc(c.x-c.r*.2,c.y-c.r*.2,c.r*.55,0,Math.PI*2);ctx.fill();}ctx.restore();
+ ctx.save();for(const c of dashClouds){const age=1-c.life/c.maxLife;ctx.globalAlpha=Math.max(0,c.life/c.maxLife)*.38;ctx.fillStyle=save.secretCosmetics?'#ffd75a':'#9bbf5f';ctx.beginPath();ctx.ellipse(c.x,c.y,c.r*(1+age*2),c.r*(.8+age*1.3),age,0,Math.PI*2);ctx.fill();ctx.globalAlpha*=.45;ctx.fillStyle='#d0df86';ctx.beginPath();ctx.arc(c.x-c.r*.2,c.y-c.r*.2,c.r*.55,0,Math.PI*2);ctx.fill();}ctx.restore();
 }
 function migrateWildRun(r){
  for(const k of ['counterReadyAt','counterSpeedUntil'])if(r.player[k]!==undefined&&(!Number.isFinite(r.player[k])||r.player[k]<0||r.player[k]>r.elapsed+6.01))throw Error('Invalid counter timer');
@@ -3557,9 +3565,9 @@ function buyStone(id){
  const s=STONES.find(s=>s.id===id);if(!s||state!=='stageclear'||id!==runDifficulty||isSwarmMode||bossEncounters<1||save.stones?.[id]||save.slimeBank<s.cost)return false;
  save.stones=save.stones||{};save.slimeBank-=s.cost;save.stones[id]=true;persistSave();gameAudio.play('buy');renderBalancedMarket();syncDraftUI();if(STONES.every(s=>save.stones[s.id]))openSecretReveal();return true;
 }
-function openSecretReveal(){if(!STONES.every(s=>save.stones?.[s.id]))return false;secretRevealOpen=true;document.getElementById('secret-reveal').classList.remove('hidden');document.getElementById('secret-code').value='';document.getElementById('secret-result').textContent=save.secretMode?tr('Secret Mode открыт. Продолжение появится позже.','Secret Mode unlocked. More to come.'):tr('Все камни собраны. Введи код.','All stones collected. Enter the code.');document.getElementById('secret-code').focus();return true;}
+function openSecretReveal(){if(!STONES.every(s=>save.stones?.[s.id]))return false;secretRevealOpen=true;document.getElementById('secret-reveal').classList.remove('hidden');document.getElementById('secret-code').value='';document.getElementById('secret-result').textContent=save.secretMode?tr('Secret Mode открыт.','Secret Mode unlocked.'):tr('Все камни собраны. Введи код.','All stones collected. Enter the code.');document.getElementById('secret-start').hidden=!save.secretMode;document.getElementById('secret-code').focus();return true;}
 function closeSecretReveal(){secretRevealOpen=false;document.getElementById('secret-reveal').classList.add('hidden');document.getElementById('secret-code').value='';}
-function unlockSecretMode(code){if(!STONES.every(s=>save.stones?.[s.id])||typeof code!=='string'||code.trim()!=='ThereIsNoSpoon')return false;save.secretMode=true;persistSave();document.getElementById('secret-result').textContent=tr('Secret Mode открыт. Продолжение появится позже.','Secret Mode unlocked. More to come.');return true;}
+function unlockSecretMode(code){if(!STONES.every(s=>save.stones?.[s.id])||typeof code!=='string'||code.trim()!=='ThereIsNoSpoon')return false;save.secretMode=true;persistSave();document.getElementById('secret-result').textContent=tr('Secret Mode открыт.','Secret Mode unlocked.');document.getElementById('secret-start').hidden=false;return true;}
 function syncDraftUI(){syncMirrorUI();
  for(const [id,text]of [['touch-stop','■ '+tr('Стоп','Stop')],['secret-close',tr('Закрыть','Close')],['secret-submit',tr('Открыть','Unlock')],['secret-code-label',tr('Код','Code')]]){const el=document.getElementById(id);if(el)el.textContent=text;}
  for(const id of ['secret-menu','secret-pause']){const e=document.getElementById(id);if(e){e.classList.toggle('hidden',!STONES.every(s=>save.stones?.[s.id]));e.textContent='Secret Mode';}}
@@ -3947,7 +3955,7 @@ function labBuy(kind){
  if(kind==='nest')a.nest=true;if(kind==='guard')a.guard=1;if(kind==='damage')a.damageUntil=elapsed+20;if(kind==='speed')a.speedUntil=elapsed+10;
  checkpoint();return true;
 }
-function gambinoOutcome(r){if(!Number.isFinite(r)||r<0||r>=1)throw Error('Invalid roll');return r<.0001?'hint':r<.0011?'gear':r<.0211?'guard':r<.0361?'damage':r<.05?'speed':r<.18?'half':r<.26?'quarter':r<.27?'jackpot':'loss';}
+function gambinoOutcome(r){if(!Number.isFinite(r)||r<0||r>=1)throw Error('Invalid roll');return r<.0001?'hint':r<.0011?'gear':r<.0211?'guard':r<.0361?'damage':r<.05?'speed':r<.18?'half':r<.26?'quarter':r<.27?'jackpot':r<.28?'decoy':'loss';}
 function spinGambino(){
  if(state!=='event'||!gambinoOpen||!player||mirrorSession)return false;
  const cost=labCost('spin');if(!labSpend(cost))return false;const a=player.lab;a.spins++;const outcome=gambinoOutcome(Math.random());
@@ -3962,6 +3970,7 @@ function spinGambino(){
   if(pool.length){const item=pool[Math.floor(Math.random()*pool.length)];save.equip[item.id]=true;persistSave();result=tr('Экипировка в коллекции: ','Equipment added to collection: ')+L(item.name)+tr('. Выбери её в наборе.','. Equip it in a preset.');}
   else{bloodThisRun+=Math.floor(cost/2);result=tr('Коллекция полна — возврат половины ставки.','Collection complete — half the stake returned.');}
  }
+ if(outcome==='decoy'){const words=['ChaosIsALadder','SecretIngredient','TheCakeIsALie','WarNeverChanges','LinkTheFire'];result=words[Math.floor(Math.random()*words.length)];}
  if(outcome==='hint')result=String.fromCharCode(84,104,101,114,101,73,115,78,111,83,112,111,111,110);
  a.receipt=result;checkpoint();renderGambino();return outcome;
 }
@@ -4021,7 +4030,7 @@ function mirrorSource(){
  if(!current)return null;try{return validateRun(JSON.parse(JSON.stringify(current)),save);}catch(e){return null;}
 }
 function startMirrorArena(){
- if(mirrorSession||!hasAllStones()||state!=='menu')return false;
+ if(secretSession||mirrorSession||!hasAllStones()||state!=='menu')return false;
  const original=mirrorSource(),build=original?JSON.parse(JSON.stringify(original.player)):null,mode=original?.difficulty||save.preferredDifficulty||'normal';
  mirrorSession={original,finished:false,fromPause:state==='paused'};
  startRun(mode,build?.weapon||'spikes');
@@ -4371,9 +4380,9 @@ function pressureCooldown(){const s=shieldSpec();return s.duration+s.gap+(runDif
 function initBossPressure(e){if(!BOSS_PRESSURE[e.bossKey]||mirrorSession)return;if(!Number.isFinite(e.pressureNextAt))e.pressureNextAt=elapsed+Math.max(8,player.shieldCooldown+1);}
 function acceptPressureBlock(){const p=bossActive?.pressure;if(!p)return;if(p.phase==='warn'){p.blocked=true;}else if(p.phase==='black'){p.phase='recover';p.left=.8;p.blocked=true;}perfDirty=true;}
 function updateBossPressure(e,dt){
- if(!BOSS_PRESSURE[e.bossKey]||mirrorSession)return false;initBossPressure(e);let p=e.pressure;
- if(!p){if(abilityActive(e))return false;if(elapsed<Math.max(e.pressureNextAt,(e.pressureLastAt??-1e6)+pressureCooldown()))return false;
-  const kind=BOSS_PRESSURE[e.bossKey];p=e.pressure={kind,phase:'warn',left:pressureWarning(kind),duration:pressureWarning(kind),blocked:player.shieldActiveTimer>0};e.pressureLastAt=elapsed;gameAudio.play('boss');perfDirty=true;
+ if(!BOSS_PRESSURE[e.bossKey]||mirrorSession||(secretSession&&e!==bossActive))return false;initBossPressure(e);let p=e.pressure;
+ if(!p){if(secretSession&&elapsed<(secretSession.pressureReadyAt||0))return false;if(abilityActive(e))return false;if(elapsed<Math.max(e.pressureNextAt,(e.pressureLastAt??-1e6)+pressureCooldown()))return false;
+  const kind=BOSS_PRESSURE[e.bossKey];p=e.pressure={kind,phase:'warn',left:pressureWarning(kind),duration:pressureWarning(kind),blocked:player.shieldActiveTimer>0};e.pressureLastAt=elapsed;if(secretSession)secretSession.pressureReadyAt=elapsed+pressureWarning(kind)+pressureCooldown();gameAudio.play('boss');perfDirty=true;
  }
  if(p.phase==='warn'&&player.shieldActiveTimer>0)p.blocked=true;
  p.left=Math.max(0,p.left-dt);if(p.left>0)return true;
@@ -4629,8 +4638,69 @@ function initializeLegend(){
  screens.legend=document.getElementById('legend-screen');document.getElementById('legend-back').onclick=()=>setState('howto');
 }
 
+
+var secretSession=null;
+function startSecretMode(){
+ if(secretSession||mirrorSession||!save.secretMode||!hasAllStones()||!['menu','paused'].includes(state))return false;
+ const original=mirrorSource(),build=original?JSON.parse(JSON.stringify(original.player)):null;
+ closeSecretReveal();secretSession={original,wave:0,finished:false};
+ startRun(original?.difficulty||save.preferredDifficulty||'normal',build?.weapon||'spikes');
+ if(build){player=build;for(const key of ['damageUntil','speedUntil'])player.lab[key]=Math.max(0,player.lab[key]-(original.elapsed||0));}
+ runId='secret-'+Date.now();rankedRun=false;mapEvents=[];caches=[];worldEvent=null;eventClock=1e9;seasonRun.theme=null;eliteClock=1e9;nextBossAt=1e9;spawnTimer=1e9;resetTouchContinuity();
+ nextSecretWave();return true;
+}
+function nextSecretWave(){
+ if(!secretSession||secretSession.finished||secretSession.wave>=15||(secretSession.wave>0&&state!=='secretStage'))return false;
+ secretSession.wave++;const wave=secretSession.wave;fieldEncounter=wave-1;currentStageIdx=stageIndexForEncounter(fieldEncounter);announcedStageIdx=currentStageIdx;
+ enemies=[];enemyField.invalidate();enemyProjectiles=[];playerProjectiles=[];playerRockets=[];hazards=[];fieldZones=[];orbs=[];orbField.invalidate();orbList=null;particles=[];texts=[];bossActive=null;
+ player.x=WORLD.w/2;player.y=WORLD.h/2;player.hp=player.maxHp;player.invuln=3;player.shieldActiveTimer=0;player.shieldCooldown=0;player.staticCooldown=0;player.acidCooldown=0;player.dashCooldown=0;dashCooldown=0;player.dashCharges=player.survivalMode?3:1;player.dashRechargeLeft=0;
+ const pool=Object.keys(BOSS_DEFS).filter(k=>k!==MIRROR_BOSS_KEY);
+ for(let i=0;i<wave*3;i++){
+  const key=pool[Math.floor(Math.random()*pool.length)];spawnBoss(key);const e=bossActive,base=BOSS_DEFS[key],a=i*Math.PI*2/(wave*3),r=480+(i%3)*160;
+  e.x=player.x+Math.cos(a)*r;e.y=player.y+Math.sin(a)*r;e.secretSpawner=true;e.secretSummonTimer=3+(i%12)*.4;e.hp=e.maxHp=Math.max(100,Math.round(base.hp*difficulty().bossHp*(.55+.08*(wave-1))));e.dmg=base.dmg*difficulty().bossDmg*(1+.06*(wave-1));
+  if(e.brain){e.brain.cycle=Math.floor(Math.random()*3);e.brain.timer=1.5+(i%8)*.35;}
+ }
+ enemyField.invalidate();bossActive=enemies[0];camera.x=player.x-viewWidth()/2;camera.y=player.y-viewHeight()/2;setState('playing');updateHUD();updateWildHUD();return true;
+}
+function killSecretSpawner(e){
+ if(!secretSession||runEnded||e.dead)return;e.dead=true;e.hp=0;enemyField.remove(e);recordKill(e);killCount++;
+ bossActive=enemies.find(o=>o.secretSpawner&&!o.dead)||null;
+ if(player.lifeOnKill>0)healPlayer(player.lifeOnKill*5);bloodThisRun+=12;gainXP(12);for(let i=0;i<5;i++)addParticle(e.x,e.y,'#ffd75a');
+}
+function updateSecretMode(dt){
+ if(!secretSession||secretSession.finished)return;
+ const alive=enemies.filter(e=>!e.dead);bossActive=alive.find(e=>e.secretSpawner)||null;
+ if(!alive.length){
+  if(secretSession.wave===15){finishSecretMode(true);return;}
+  setState('secretStage');document.getElementById('secret-stage-title').textContent=tr('Уровень пройден','Stage cleared')+' · '+secretSession.wave+'/15';return;
+ }
+ if(CHEATS.noSpawn)return;
+ const types=Object.keys(ENEMY_TYPES),budget=Math.min(220,difficulty().cap);
+ for(const e of alive){if(!e.secretSpawner)continue;e.secretSummonTimer-=dt;if(e.secretSummonTimer>0)continue;e.secretSummonTimer=8+Math.random()*4;
+  let spawned=0;for(let i=0;i<10&&enemies.length<budget;i++){const a=Math.random()*Math.PI*2,x=Math.max(30,Math.min(WORLD.w-30,e.x+Math.cos(a)*95)),y=Math.max(30,Math.min(WORLD.h-30,e.y+Math.sin(a)*95));if(Math.hypot(x-player.x,y-player.y)<160)continue;
+   const before=enemies.length;spawnEnemy(types[Math.floor(Math.random()*types.length)],{x,y});if(enemies.length>before){enemies.at(-1).summonerId=e.id;spawned++;}
+  }if(spawned)addFloatText(e.x,e.y-40,'✹','#d9b457',18);
+ }
+ document.getElementById('expedition-status').textContent='Secret Mode · '+secretSession.wave+'/15 · '+tr('Боссы: ','Bosses: ')+alive.filter(e=>e.secretSpawner).length;
+}
+function finishSecretMode(won,reason=''){
+ if(!secretSession||secretSession.finished)return false;secretSession.finished=true;runEnded=true;
+ if(won&&!CHEATS.godMode&&!CHEATS.oneShot&&!CHEATS.turbo){save.secretCosmetics=true;persistSave();}
+ setState('secretResult');document.getElementById('secret-result-title').textContent=won?tr('Вы получили доступ ко всему!','You have gained access to everything!'):tr('Испытание завершено','Challenge ended');
+ document.getElementById('secret-result-info').textContent=won?'':reason+' · '+secretSession.wave+'/15';return true;
+}
+function leaveSecretMode(){
+ if(!secretSession)return;const original=secretSession.original;secretSession=null;runEnded=true;enemies=[];enemyField.invalidate();bossActive=null;
+ if(original){resumeData=original;restoreRun();}else{player=null;resumeData=null;setState('menu');}
+}
+function initializeSecretMode(){
+ document.getElementById('secret-close').insertAdjacentHTML('beforebegin','<button class="btn" id="secret-start" hidden>▶ Secret Mode</button>');document.getElementById('secret-start').onclick=startSecretMode;
+ document.body.insertAdjacentHTML('beforeend','<div class="overlay hidden" id="secret-stage-screen"><div class="panel"><h1 class="title" id="secret-stage-title"></h1><button class="btn" id="secret-next">▶</button><button class="btn secondary" id="secret-stage-leave">×</button></div></div><div class="overlay hidden" id="secret-result-screen"><div class="panel"><h1 class="title" id="secret-result-title"></h1><p id="secret-result-info"></p><button class="btn" id="secret-return">↩</button></div></div>');
+ screens.secretStage=document.getElementById('secret-stage-screen');screens.secretResult=document.getElementById('secret-result-screen');document.getElementById('secret-next').onclick=nextSecretWave;document.getElementById('secret-stage-leave').onclick=()=>finishSecretMode(false);document.getElementById('secret-return').onclick=leaveSecretMode;
+}
+
 /* ========================================================================= BOOT */
-initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeAchievements();initializeLabUI();initializeFeedbackUI();initializeMobileUI();initializeJourneyUI();initializePerformance();initializeLegend();runtimeReady=true;
+initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeAchievements();initializeLabUI();initializeFeedbackUI();initializeMobileUI();initializeJourneyUI();initializePerformance();initializeLegend();initializeSecretMode();runtimeReady=true;
 copyPreviousProgress();
 loadSave().then(()=>{
   setState('menu');
