@@ -232,11 +232,13 @@ body.controls-left #shield-btn,body.controls-left #dash-btn{right:auto;left:calc
 .menu-tick{cursor:pointer}.menu-tick:focus-visible{outline:2px solid #d4af37}
  .legend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.legend-bug{padding:12px;border:1px solid #a38c62;border-radius:10px}.legend-bug canvas{float:left;margin:0 10px 6px 0;background:#23382b;border-radius:10px;width:80px;height:80px}.legend-bug p{clear:both;font-size:13px;line-height:1.5}
 body.secret-cosmetics #shield-btn{background:#08090b;color:#d9d9dc;border-color:#777983}body.secret-cosmetics #shield-btn.active{background:#030305;border-color:#d5c98d;box-shadow:0 0 18px 3px #14141c}body.secret-cosmetics #dash-btn{background:#594216;color:#ffdf78;border-color:#e1b74b}
+#afk-glow{position:fixed;inset:0;z-index:7;pointer-events:none;border:5px solid #ffdc72;box-shadow:inset 0 0 45px 12px #e6ae4480;animation:afk-flash .4s steps(1,end) infinite}@keyframes afk-flash{0%,49%{opacity:.85}50%,100%{opacity:0}}
 </style>
 </head>
 <body>
 
 <canvas id="game-canvas"></canvas>
+<div id="afk-glow" class="hidden" aria-hidden="true"></div>
 <div id="joystick-base"></div>
 <div id="joystick-knob"></div>
 <div id="shield-btn" class="hidden" role="button" tabindex="0" aria-label="Панцирный щит">⬡<div id="shield-cd"></div></div>
@@ -824,7 +826,7 @@ const HUB_STATES = ['menu','howto','shop','equipment'];
 function setState(s){
   if(secretSession&&!secretSession.finished){if(s==='menu'){finishSecretMode(false,tr('Бой прерван','Fight abandoned'));return;}if(['shop','equipment','settlement'].includes(s))return;}
   if(mirrorSession&&!mirrorSession.finished){if(s==='menu'){finishMirrorArena(false,tr('Бой прерван','Fight abandoned'));return;}if(['shop','equipment','settlement'].includes(s))return;}
-  preserveTouchBeforeState(s);state = s;
+  preserveTouchBeforeState(s);state = s;syncAfkGlow();
   endJoystick(); keys.clear();
   Object.values(screens).forEach(el=>el.classList.add('hidden'));
   if(screens[s]) screens[s].classList.remove('hidden');
@@ -2047,14 +2049,14 @@ function renderShop(){
 function renderEquipment(){renderLoadouts();}
 function openCheats(){
   if(!cheatsUnlocked)return false;
-  cheatsOpen = true;
+  cheatsOpen = true;syncAfkGlow();
   if(state==='paused')screens.paused.classList.add('hidden');
   cheatsScreen.classList.remove('hidden');
   document.getElementById('nav-cheats').classList.add('active');
   buildCheatsUI();
 }
 function closeCheats(){
-  cheatsOpen = false;
+  cheatsOpen = false;syncAfkGlow();
   cheatsScreen.classList.add('hidden');
   document.getElementById('nav-cheats').classList.remove('active');
   if(state==='paused')screens.paused.classList.remove('hidden');
@@ -4734,6 +4736,7 @@ STAGES[1].pool=STAGES[1].pool.map(k=>k==='flea'?'leech':k);
 LEGEND_BUGS.leech=['Напрыгивает и присасывается. Потряси клещом влево-вправо несколько раз, чтобы сбросить.','Jumps and attaches. Move left and right several times to shake it off.'];
 Object.assign(UI.ru,{tInfiniteBlood:'Бесконечная кровь'});Object.assign(UI.en,{tInfiniteBlood:'Infinite Blood'});
 function updateMovementRules(dt){
+ updateAfkGlow(dt);
  if(CHEATS.infiniteBlood)bloodThisRun=99999;
  const p=player;if(!p.idleAnchor)p.idleAnchor={x:p.x,y:p.y};
  if(Math.hypot(p.x-p.idleAnchor.x,p.y-p.idleAnchor.y)>18){p.idleAnchor={x:p.x,y:p.y};p.idleTime=0;p.idleDrain=0;}else p.idleTime=(p.idleTime||0)+dt;
@@ -4779,6 +4782,10 @@ function addExpandedCheats(){
  for(const id of ['scratchBlades','cyclopsBeam'])add('+ '+L(RUN_UPGRADES.find(u=>u.id===id).name),()=>grantUpgrade(id));
  add(tr('Полное здоровье','Full health'),()=>{player.hp=player.maxHp;});add(tr('Сбросить КД','Reset cooldowns'),()=>{player.shieldCooldown=0;dashCooldown=0;player.dashCharges=3;player.staticCooldown=0;player.acidCooldown=0;});
 }
+
+var afkGlowState=null;
+function syncAfkGlow(){const on=state==='playing'&&!cheatsOpen&&afkGlowState?.player===player&&afkGlowState.still>15;document.getElementById('afk-glow')?.classList.toggle('hidden',!on);return on;}
+function updateAfkGlow(dt){if(afkGlowState?.player!==player)afkGlowState={player,x:player.x,y:player.y,still:0};const a=afkGlowState;if(Math.hypot(player.x-a.x,player.y-a.y)>.5){a.x=player.x;a.y=player.y;a.still=0;}else a.still+=dt;syncAfkGlow();}
 
 /* ========================================================================= BOOT */
 initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeAchievements();initializeLabUI();initializeFeedbackUI();initializeMobileUI();initializeJourneyUI();initializePerformance();initializeLegend();initializeSecretMode();runtimeReady=true;
