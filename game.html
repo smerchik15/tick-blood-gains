@@ -230,6 +230,7 @@ body.controls-left #shield-btn,body.controls-left #dash-btn{right:auto;left:calc
 @media(max-height:620px){body.controls-left #shield-btn,body.controls-left #dash-btn{left:calc(12px + env(safe-area-inset-left))}body.controls-left .field-skill{left:calc(72px + env(safe-area-inset-left))}#mobile-zoom button{width:36px;height:36px}}
 #entry-code-training{margin:12px 0;padding:12px;border:1px solid #c7b48b;border-radius:10px;background:#efe2c0;color:#493929;font-size:13px;line-height:1.5}#entry-code-training a{display:block;margin-top:6px;color:#6a2e2d;font-weight:700;text-decoration:underline}
 .menu-tick{cursor:pointer}.menu-tick:focus-visible{outline:2px solid #d4af37}
+ .legend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.legend-bug{padding:12px;border:1px solid #a38c62;border-radius:10px}.legend-bug canvas{float:left;margin:0 10px 6px 0;background:#23382b;border-radius:10px;width:80px;height:80px}.legend-bug p{clear:both;font-size:13px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -413,7 +414,7 @@ const ACHIEVEMENTS=[
  {id:'stones',ru:'Пять камней в брюшке',en:'Five Stones in the Belly',desc:'Собрать все пять камней',eng:'Collect all five stones'},
  {id:'mirror',ru:'Самая опасная самка',en:'The Deadliest Female',desc:'Победить своё отражение и получить облик с бантиком',eng:'Defeat your reflection and earn the bow skin'}
 ];
-const DEFAULT_SAVE = { bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,achievements:{},bowSkin:false,skin:'default',monthly:null,audio:{enabled:true,volume:.35},mobile:{side:"right",zoom:1},
+const DEFAULT_SAVE = { seenEnemies:{}, bloodBank:0, slimeBank:0, lang:'ru', preferredDifficulty:'normal',loadouts:[[],[],[]],activeLoadout:0,records:[],nickname:'Клещ',settlements:[],stones:{},secretMode:false,achievements:{},bowSkin:false,skin:'default',monthly:null,audio:{enabled:true,volume:.35},mobile:{side:"right",zoom:1},
   upg:{vitality:0,fangs:0,swiftness:0,appetite:0,scent:0,resilience:0,extraLife:0,bloodPressure:0},
   equip:{magnetCollar:false, chitinPlate:false, vampiric:false, flamethrower:false, zapper:false, rocket:false, drone:false,staticField:false,acidField:false,chickenCannon:false}
 };
@@ -426,6 +427,7 @@ function normalizeSave(raw){
     if(raw[k]!==undefined && (!Number.isFinite(raw[k]) || raw[k]<0 || raw[k]>1e12)) throw Error('Invalid currency');
     out[k]=Math.floor(raw[k]||0);
   }
+  out.seenEnemies=Object.fromEntries(Object.entries(raw.seenEnemies||{}).filter(([k,v])=>/^[a-z_]{1,32}$/.test(k)&&v===true).slice(0,64));
   out.lang=raw.lang==='en'?'en':'ru';out.mobile={side:raw.mobile?.side==='left'?'left':'right',zoom:Number.isFinite(raw.mobile?.zoom)?Math.round(Math.max(.6,Math.min(1,raw.mobile.zoom))*10)/10:1};
   out.stones=Object.fromEntries(STONES.map(s=>[s.id,raw.stones?.[s.id]===true]));out.secretMode=raw.secretMode===true&&STONES.every(s=>out.stones[s.id]);out.monthly=normalizeMonthly(raw.monthly);
   out.achievements=Object.fromEntries(ACHIEVEMENTS.filter(a=>raw.achievements?.[a.id]===true).map(a=>[a.id,true]));out.bowSkin=raw.bowSkin===true;out.skin=out.bowSkin&&raw.skin==='bow'?'bow':'default';
@@ -1326,6 +1328,7 @@ function update(dt){
   // enemies
   for(const e of enemies){
     if(e.dead) continue;
+    rememberLegendEnemy(e);
     tickEnemyAffixes(e,dt);
     if(e.flash>0) e.flash-=dt;
     if(e.hitCooldown>0)e.hitCooldown-=dt;
@@ -2451,7 +2454,8 @@ function syncWildUI(){
   document.getElementById('pause-btn').setAttribute('aria-label',tr('Пауза','Pause'));
   document.getElementById('dash-btn').setAttribute('aria-label',player?.survivalMode?tr('Рывок: три заряда','Dash: three charges'):tr('Рывок: 4 секунды перезарядки','Dash: 4 second cooldown'));
   const guide=document.getElementById('howto-body');
-  if(guide)guide.innerHTML=playerGuide()+combatGuide()+survivalGuide();
+  if(guide){guide.innerHTML='<button class="btn secondary" id="guide-legend">'+tr('Легенда','Legend')+'</button>'+playerGuide()+combatGuide()+survivalGuide();document.getElementById('guide-legend').onclick=()=>setState('legend');}
+  if(state==='legend')renderLegend();
 }
 function updateStorageStatus(){
   const el=document.getElementById('storage-status');if(!el)return;
@@ -4578,8 +4582,56 @@ function initializeAchievements(){
  document.getElementById('skin-bow').onclick=()=>{if(!save.bowSkin)return;save.skin=save.skin==='bow'?'default':'bow';persistSave();syncAchievements();};syncAchievements();
 }
 
+
+/* Player legend: discoveries are profile data; combat values are unchanged. */
+const LEGEND_BUGS={
+ mosquito:['Быстро преследует клеща, двигаясь зигзагом.','Fast pursuer that strafes as it approaches.'],
+ ant:['Идёт группой и давит числом.','Travels in groups and overwhelms by numbers.'],
+ flea:['Сближается короткими быстрыми прыжками.','Closes the distance with fast, short hops.'],
+ beetle:['Медленный крепкий жук; вблизи бьёт панцирем.','Slow and tough; slams its shell at close range.'],
+ spider:['Держится на расстоянии и стреляет паутиной, замедляющей клеща.','Fires slowing webs from a distance.'],
+ wasp:['После замаха делает быстрый рывок по выбранному направлению.','Telegraphs a fast dash along a locked direction.'],
+ drone:['Держит дистанцию и стреляет быстрым снарядом.','Keeps its distance and fires a fast projectile.'],
+ maggot:['Медленно ползёт к клещу; опаснее в толпе.','Crawls toward the tick; more dangerous in a crowd.'],
+ guard:['Поворачивает щит к клещу: заходи с незащищённой стороны.','Turns its shield toward you; approach from an exposed side.'],
+ bombardier:['Отмечает место атаки и оставляет кислотную лужу.','Marks a target area and leaves an acid pool.'],
+ weaver:['Стреляет веером из трёх замедляющих нитей.','Fires a fan of three slowing web shots.'],
+ rhino:['Заранее показывает направление разгона, затем таранит и восстанавливается.','Shows its charge direction, rushes forward, then recovers.'],
+ firefly:['Лечит раненых союзников поблизости.','Heals nearby wounded allies.'],
+ spore:['Ползёт к клещу; опасайся споровых эффектов и зоны после гибели.','Approaches the tick; watch for spore effects and its death zone.'],
+ colorado:['Готовит подрыв: взрывается рядом и выпускает снаряды по кругу.','Winds up a blast, exploding nearby and firing shots in a ring.'],
+ slider:['Предупреждает о направлении, затем скользит длинным рывком.','Telegraphs its direction, then slides in a long dash.']
+};
+function rememberLegendEnemy(e){
+ if(!ENEMY_TYPES[e.type]||save.seenEnemies?.[e.type]||e.x+e.radius<camera.x||e.y+e.radius<camera.y||e.x-e.radius>camera.x+viewWidth()||e.y-e.radius>camera.y+viewHeight())return;
+ (save.seenEnemies??={})[e.type]=true;persistSave();
+}
+function renderLegend(){
+ let changed=false;save.seenEnemies??={};
+ for(const stats of [runStats,...save.records.map(r=>r.stats)])for(const [key,n]of Object.entries(stats?.kills||{}))if(n>0&&ENEMY_TYPES[key]&&!save.seenEnemies[key]){save.seenEnemies[key]=true;changed=true;}
+ if(changed)persistSave();
+ const known=Object.keys(ENEMY_TYPES).filter(k=>save.seenEnemies[k]);
+ document.getElementById('legend-title').textContent=tr('Легенда','Legend');document.getElementById('legend-back').textContent=tr('Назад в гайд','Back to guide');
+ const resources=[
+ ['🩸',tr('Кровь','Blood'),tr('Выпадает из врагов, находится в тайниках и выдаётся за события. Подбирай капли. Кровь текущего забега тратится в лавке на участке, на подготовку, замену мутации и ставки в Гамбино. После смерти или раннего выхода в банк идёт 20% остатка; после финала — 100%. Банковская кровь нужна для постоянной прокачки у пса.','Dropped by enemies and found in caches and events. Pick up droplets. Run Blood buys supplies, mutation replacements and Gambino spins. Death or an early exit banks 20% of the remainder; completing the expedition banks 100%. Banked Blood buys permanent Dog Shop upgrades.')],
+ ['🫧',tr('Слизь','Slime'),tr('Награда за победу над боссом. Вся заработанная слизь сохраняется при расчёте забега. Покупает постоянную экипировку и камни конечности.','Earned by defeating bosses. All earned Slime is banked when the run settles. Buys permanent equipment and Limb Stones.')],
+ ['⬆',tr('Опыт и капли силы','XP and Power Droplets'),tr('Добыча с врагов даёт опыт: повышение уровня предлагает мутации. Сильные виды роняют капли силы. Подбор также заряжает кровавый импульс; деньги в кошельке его не заряжают.','Enemy loot grants XP and levels offer mutations. Stronger species drop Power Droplets. Picking up loot also charges the Blood Burst; wallet balance does not charge it.')],
+ ['✚',tr('Лечение','Healing'),tr('Лечебные тайники восстанавливают здоровье. Регенерация и вампиризм работают от параметров сборки. В V-Mode действуют особые правила выживания из гайда.','Healing caches restore health. Regeneration and vampirism depend on your build. V-Mode follows the survival rules described in the guide.')],
+ ['🧲',tr('Магнит','Magnet'),tr('Тайник с магнитом притягивает выпавшую добычу. Параметр сбора увеличивает обычный радиус подбора.','Magnet caches pull in dropped loot. Collection range increases your normal pickup radius.')],
+ ['◆',tr('Камни конечности','Limb Stones'),tr('Покупаются за слизь между участками после босса: камень соответствует сложности забега, каждый приобретается один раз. Пять камней открывают доступ к Зеркалу через клеща в главном меню.','Bought with Slime between stages after a boss: each difficulty has its own stone, purchased once. Five stones unlock the Mirror through the tick in the main menu.')],
+ ['🧬',tr('Мутации и экипировка','Mutations and gear'),tr('Мутации выбираются при повышении уровня и за отдельные награды; работают в текущем забеге. Экипировка покупается за слизь и собирается в набор до старта; меняет стиль и взаимодействует с мутациями.','Mutations come from leveling and special rewards and last for the current run. Gear is bought with Slime and equipped before starting; it changes your style and interacts with mutations.')],
+ ['◉',tr('Метки опасности','Danger marks'),tr('Золотое кольцо — элитный враг с повышенной наградой. Линии и контуры на земле показывают готовящуюся атаку; лужи и погодные зоны опасны. DANGER обозначает особую атаку босса.','A gold ring marks an elite with better rewards. Ground lines and outlines telegraph attacks; pools and weather zones are hazardous. DANGER marks a boss special attack.')]
+ ];
+ document.getElementById('legend-body').innerHTML='<h2>'+tr('Добыча и обозначения','Loot and symbols')+'</h2>'+resources.map(([icon,title,body])=>'<section><h3>'+icon+' '+title+'</h3><p>'+body+'</p></section>').join('')+'<h2>'+tr('Встреченные жуки','Encountered bugs')+' · '+known.length+'/'+Object.keys(ENEMY_TYPES).length+'</h2><p>'+tr('Виды открываются, когда попадают в поле зрения. Неизвестные виды не раскрываются заранее.','Species unlock when they enter your view. Unknown species stay hidden.')+'</p><div class="legend-grid">'+known.map(key=>'<section class="legend-bug"><canvas id="legend-bug-'+key+'" width="96" height="96" aria-label="'+esc(L(ENEMY_TYPES[key].name))+'"></canvas><h3>'+esc(L(ENEMY_TYPES[key].name))+'</h3><p>'+tr(...LEGEND_BUGS[key])+'</p></section>').join('')+'</div>'+(known.length?'':'<p>'+tr('Пока никого не встретил. Начни забег — легенда будет пополняться.','No encounters yet. Start a run to fill the legend.')+'</p>');
+ for(const key of known){const original=ctx;try{ctx=document.getElementById('legend-bug-'+key).getContext('2d');const e={...ENEMY_TYPES[key],type:key,x:48,y:48,radius:18,angle:0,legPhase:1,shieldAngle:0,skillPhase:'idle'};if(['colorado','slider'].includes(key))drawNewBug(e);else if(NEW_ENEMY_IDS.includes(key))drawWildEnemy(e);else drawOrganic(e);}finally{ctx=original;}}
+}
+function initializeLegend(){
+ document.body.insertAdjacentHTML('beforeend','<div class="overlay hidden" id="legend-screen"><div class="panel" style="max-width:760px;text-align:left"><h1 class="title" id="legend-title"></h1><div id="legend-body"></div><button class="btn secondary" id="legend-back"></button></div></div>');
+ screens.legend=document.getElementById('legend-screen');document.getElementById('legend-back').onclick=()=>setState('howto');
+}
+
 /* ========================================================================= BOOT */
-initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeAchievements();initializeLabUI();initializeFeedbackUI();initializeMobileUI();initializeJourneyUI();initializePerformance();runtimeReady=true;
+initializeWildUI();initializePolishUI();initializeSecretEntry();initializeDraftUI();initializeCombatUI();initializeMirrorUI();initializeAchievements();initializeLabUI();initializeFeedbackUI();initializeMobileUI();initializeJourneyUI();initializePerformance();initializeLegend();runtimeReady=true;
 copyPreviousProgress();
 loadSave().then(()=>{
   setState('menu');
