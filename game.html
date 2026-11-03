@@ -2860,6 +2860,7 @@ function renderDetailedResult(){
 }
 function openRecords(){majorReturnState=state==='paused'?'playing':state==='gameover'?'gameover':'playing';setState('records');renderRecords();}
 async function renderRecords(){
+ syncAchievements();
  const request=++leaderRequest;const box=document.getElementById('records-list');box.textContent=tr('Загрузка…','Loading…');
  let rows=save.records.filter(r=>r.difficulty===leaderFilter&&r.mode===leaderMode).sort((a,b)=>b.score-a.score).slice(0,50);
  document.getElementById('records-note').textContent=recordsScope==='local'?tr('Последние 100 забегов на этом устройстве. Чит-забеги помечены вне зачёта.','Last 100 runs on this device. Cheat runs are marked unranked.'):tr('Общий рейтинг сообщества. Очки пересчитываются сервером, но клиентские убийства не защищены полноценным античитом.','Community leaderboard. Scores are recomputed by the server, but client kill reports do not have full anti-cheat protection.');
@@ -2875,13 +2876,13 @@ async function publishScore(){
 }
 function initializeMajorUI(){
  initializeEconomyUI();
- document.getElementById('btn-equip').insertAdjacentHTML('afterend','<button class="btn secondary" id="btn-atlas">🧬 Эволюции</button><button class="btn secondary" id="btn-records">🏆 Рейтинг и рекорды</button>');
+ document.getElementById('btn-equip').insertAdjacentHTML('afterend','<button class="btn secondary" id="btn-atlas">🧬 Эволюции</button><button class="btn secondary" id="btn-records">🏆 Достижения и рейтинг</button>');
  document.getElementById('pause-build').insertAdjacentHTML('afterend','<button class="btn secondary small" id="pause-atlas">🧬 Эволюции</button><button class="btn secondary small" id="pause-records">🏆 Рекорды</button>');
  document.getElementById('levelup-choices').insertAdjacentHTML('afterend','<button class="text-btn" id="mutation-atlas">🧬 Атлас эволюций</button>');
  document.getElementById('hud').insertAdjacentHTML('beforeend','<div class="hud-block" id="run-score">0 очк.</div>');
- document.body.insertAdjacentHTML('beforeend',`<div class="overlay hidden" id="atlas-screen"><div class="panel wide-panel"><h1 class="title" id="atlas-title">Эволюции оружия</h1><p id="atlas-subtitle" class="subtitle"></p><div id="atlas-list" class="atlas-list"></div><button class="btn secondary" id="atlas-back">Назад</button></div></div><div class="overlay hidden" id="event-screen"><div class="panel"><h1 class="title" id="event-title"></h1><p class="subtitle" id="event-desc"></p><div id="event-options"></div></div></div><div class="overlay hidden" id="records-screen"><div class="panel wide-panel"><h1 class="title" id="records-title">Рейтинг и рекорды</h1><div class="record-filters"><select id="records-scope" aria-label="Тип рейтинга"><option value="local">Личные</option><option value="global">Общий рейтинг</option></select><select id="records-difficulty" aria-label="Сложность рейтинга"></select><select id="records-mode" aria-label="Режим рейтинга"><option value="expedition">Экспедиция</option><option value="swarm">Рой</option></select></div><p id="records-note" class="wallet-note"></p><div id="records-list"></div><p id="records-detail" class="wallet-note"></p><button class="btn secondary" id="records-back">Назад</button></div></div>`);
+ document.body.insertAdjacentHTML('beforeend',`<div class="overlay hidden" id="atlas-screen"><div class="panel wide-panel"><h1 class="title" id="atlas-title">Эволюции оружия</h1><p id="atlas-subtitle" class="subtitle"></p><div id="atlas-list" class="atlas-list"></div><button class="btn secondary" id="atlas-back">Назад</button></div></div><div class="overlay hidden" id="event-screen"><div class="panel"><h1 class="title" id="event-title"></h1><p class="subtitle" id="event-desc"></p><div id="event-options"></div></div></div><div class="overlay hidden" id="records-screen"><div class="panel wide-panel"><h1 class="title" id="records-title">Достижения и рейтинг</h1><div class="record-filters"><select id="records-scope" aria-label="Тип рейтинга"><option value="local">Личные</option><option value="global">Общий рейтинг</option></select><select id="records-difficulty" aria-label="Сложность рейтинга"></select><select id="records-mode" aria-label="Режим рейтинга"><option value="expedition">Экспедиция</option><option value="swarm">Рой</option></select></div><p id="records-note" class="wallet-note"></p><div id="records-list"></div><p id="records-detail" class="wallet-note"></p><button class="btn secondary" id="records-back">Назад</button></div></div>`);
  screens.atlas=document.getElementById('atlas-screen');screens.event=document.getElementById('event-screen');screens.records=document.getElementById('records-screen');
- document.querySelector('#gameover-screen .panel').insertAdjacentHTML('beforeend','<div id="result-details"></div><label class="nickname-label">Ник для общего рейтинга <input id="nickname" maxlength="20" placeholder="Клещ"></label><p class="wallet-note">Публикуются только ник, очки, время, сложность и счётчики убийств.</p><button class="btn secondary" id="publish-score">Опубликовать результат</button><p class="wallet-note" id="publish-status"></p><button class="btn secondary" id="result-records">🏆 Рейтинг и рекорды</button>');
+ document.querySelector('#gameover-screen .panel').insertAdjacentHTML('beforeend','<div id="result-details"></div><label class="nickname-label">Ник для общего рейтинга <input id="nickname" maxlength="20" placeholder="Клещ"></label><p class="wallet-note">Публикуются только ник, очки, время, сложность и счётчики убийств.</p><button class="btn secondary" id="publish-score">Опубликовать результат</button><p class="wallet-note" id="publish-status"></p><button class="btn secondary" id="result-records">🏆 Достижения и рейтинг</button>');
  document.getElementById('gameover-screen').querySelector('.panel').classList.add('wide-panel');
  for(const id of ['btn-atlas','pause-atlas','mutation-atlas'])document.getElementById(id).onclick=openAtlas;
  for(const id of ['btn-records','pause-records','result-records'])document.getElementById(id).onclick=openRecords;
@@ -2895,7 +2896,7 @@ function initializeMajorUI(){
 function syncMajorUI(){
  syncEconomyUI();
  if(!document.getElementById('atlas-screen'))return;
- for(const [id,ru,en]of [['btn-atlas','🧬 Эволюции','🧬 Evolutions'],['btn-records','🏆 Рейтинг и рекорды','🏆 Leaderboards'],['pause-atlas','🧬 Эволюции','🧬 Evolutions'],['pause-records','🏆 Рекорды','🏆 Records'],['mutation-atlas','🧬 Атлас эволюций','🧬 Evolution atlas'],['atlas-title','Эволюции оружия','Weapon evolutions'],['atlas-back','Назад','Back'],['records-title','Рейтинг и рекорды','Leaderboards'],['records-back','Назад','Back']])document.getElementById(id).textContent=tr(ru,en);
+ for(const [id,ru,en]of [['btn-atlas','🧬 Эволюции','🧬 Evolutions'],['btn-records','🏆 Достижения и рейтинг','🏆 Achievements & rankings'],['pause-atlas','🧬 Эволюции','🧬 Evolutions'],['pause-records','🏆 Достижения и рейтинг','🏆 Achievements & rankings'],['result-records','🏆 Достижения и рейтинг','🏆 Achievements & rankings'],['mutation-atlas','🧬 Атлас эволюций','🧬 Evolution atlas'],['atlas-title','Эволюции оружия','Weapon evolutions'],['atlas-back','Назад','Back'],['records-title','Достижения и рейтинг','Achievements & rankings'],['records-back','Назад','Back']])document.getElementById(id).textContent=tr(ru,en);
  if(state==='paused'&&player){const ready=EVOLUTIONS.filter(e=>evolutionReady(e)&&!evo(e.id)).length;document.getElementById('pause-atlas').textContent=tr('🧬 Эволюции · доступно ','🧬 Evolutions · ready ')+ready;}
 }
 
@@ -4587,7 +4588,7 @@ function syncAchievements(){
  const b=document.getElementById('skin-bow');b.hidden=!save.bowSkin;b.textContent=save.skin==='bow'?tr('Бантик надет · снять','Bow equipped · remove'):tr('Надеть бантик','Equip bow');
 }
 function initializeAchievements(){
- document.getElementById('btn-howto').insertAdjacentHTML('beforebegin','<details class="loadout-effects"><summary>◆ '+tr('Следы на шкуре','Marks on the Hide')+'</summary><div id="achievement-list"></div><button class="btn secondary small" id="skin-bow" hidden></button></details>');
+ document.getElementById('records-title').insertAdjacentHTML('afterend','<details class="loadout-effects"><summary>◆ '+tr('Следы на шкуре','Marks on the Hide')+'</summary><div id="achievement-list"></div><button class="btn secondary small" id="skin-bow" hidden></button></details>');
  document.getElementById('skin-bow').onclick=()=>{if(!save.bowSkin)return;save.skin=save.skin==='bow'?'default':'bow';persistSave();syncAchievements();};syncAchievements();
 }
 
