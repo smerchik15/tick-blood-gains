@@ -2033,6 +2033,7 @@ function renderEquipment(){renderLoadouts();}
 function openCheats(){
   if(!cheatsUnlocked)return false;
   cheatsOpen = true;
+  if(state==='paused')screens.paused.classList.add('hidden');
   cheatsScreen.classList.remove('hidden');
   document.getElementById('nav-cheats').classList.add('active');
   buildCheatsUI();
@@ -2041,6 +2042,7 @@ function closeCheats(){
   cheatsOpen = false;
   cheatsScreen.classList.add('hidden');
   document.getElementById('nav-cheats').classList.remove('active');
+  if(state==='paused')screens.paused.classList.remove('hidden');
 }
 function cheatGiveBank(amt){if(!allowCheatAction())return; save.bloodBank+=amt; persistSave(); refreshBankLabels(); buildCheatsUI(); }
 function cheatGiveRunBlood(amt){if(!allowCheatAction())return;if(!player)return;bloodThisRun+=amt;gainXP(0);}
@@ -2580,11 +2582,12 @@ function initializeWildUI(){
   document.getElementById('levelup-choices').insertAdjacentHTML('afterend','<button class="btn secondary small" id="reroll-btn"></button>');
   document.body.insertAdjacentHTML('beforeend',`<button id="dash-btn" class="hidden" aria-label="Рывок">➟<span id="dash-label">SHIFT</span></button>
   <div id="expedition-hud" class="hidden"><strong id="expedition-status"></strong><div id="expedition-loot"></div><div class="control-hint" id="controls-line"></div></div>
-  <div class="overlay hidden" id="paused-screen"><div class="panel"><span class="hero-kicker" style="color:#8b7956">FIELD NOTES / YOUR BUILD</span><h1 class="title" id="pause-title"></h1><p class="subtitle" id="pause-summary"></p><div id="build-stats" class="build-list"></div><div id="pause-build"></div><button class="btn" id="pause-resume"></button><button class="btn secondary" id="pause-menu"></button><button class="text-btn" id="pause-finish"></button></div></div><div id="save-toast" class="hidden" role="status"></div>`);
+  <div class="overlay hidden" id="paused-screen"><div class="panel"><span class="hero-kicker" style="color:#8b7956">FIELD NOTES / YOUR BUILD</span><h1 class="title" id="pause-title"></h1><p class="subtitle" id="pause-summary"></p><div id="build-stats" class="build-list"></div><div id="pause-build"></div><button class="btn" id="pause-resume"></button><button class="btn secondary hidden" id="pause-cheats"></button><button class="btn secondary" id="pause-menu"></button><button class="text-btn" id="pause-finish"></button></div></div><div id="save-toast" class="hidden" role="status"></div>`);
   screens.paused=document.getElementById('paused-screen');
   initializeDifficultyUI();initializeMajorUI();
   document.getElementById('pause-btn').onclick=pauseRun;
   document.getElementById('pause-resume').onclick=resumeRun;
+  document.getElementById('pause-cheats').onclick=openCheats;
   document.getElementById('pause-menu').onclick=()=>{checkpoint();setState('menu');};
   document.getElementById('pause-finish').onclick=openSettlement;
   document.getElementById('btn-resume').onclick=restoreRun;
@@ -3400,20 +3403,26 @@ function initializePolishUI(){
 const STANDUP_TRAINING_URL='https://voice-studio-vladi.noblebell32.chatgpt.site/#standup';
 let cheatsUnlocked=false,codeEntryOpen=false,codeReturnFocus=null,entryCodeFailures=0;
 function syncEntryTrainingLink(){
+ const remaining=document.getElementById('entry-code-attempts');if(remaining)remaining.textContent=tr('Осталось попыток: ','Attempts remaining: ')+(5-entryCodeFailures);
  const box=document.getElementById('entry-code-training');box.hidden=entryCodeFailures<5;box.classList.toggle('hidden',box.hidden);
  document.getElementById('entry-code-training-note').textContent=tr('Пять попыток подряд. Может, пора потренировать подачу?','Five misses in a row. Time to practice your delivery?');
  const link=document.getElementById('entry-code-training-link');link.href=STANDUP_TRAINING_URL;link.textContent=tr('Голос · тренировка стендапа ↗','Voice · Stand-up training ↗');
 }
 function syncCheatAccess(){
- for(const id of ['btn-cheats','nav-cheats'])document.getElementById(id).classList.toggle('hidden',!cheatsUnlocked);
+ for(const id of ['btn-cheats','nav-cheats','pause-cheats'])document.getElementById(id).classList.toggle('hidden',!cheatsUnlocked);
+ const pauseButton=document.getElementById('pause-cheats');if(pauseButton)pauseButton.textContent=tr('🧪 Меню тестов / читов','🧪 Testing / Cheats');
 }
+let codeReturnState='menu';
 function openCodeEntry(){
- if(state!=='menu'||cheatsOpen)return;
- codeReturnFocus=document.activeElement;codeEntryOpen=true;keys.clear();endJoystick();syncEntryTrainingLink();
+ if(!['menu','paused'].includes(state)||cheatsOpen)return;
+ codeReturnFocus=document.activeElement;codeReturnState=state;codeEntryOpen=true;keys.clear();endJoystick();syncEntryTrainingLink();
+ if(state==='paused')screens.paused.classList.add('hidden');
  const input=document.getElementById('entry-code');input.value='';document.getElementById('entry-code-error').textContent='';document.getElementById('code-entry-screen').classList.remove('hidden');input.focus();
 }
 function closeCodeEntry(){
- codeEntryOpen=false;document.getElementById('entry-code').value='';document.getElementById('code-entry-screen').classList.add('hidden');codeReturnFocus?.focus?.();
+ codeEntryOpen=false;document.getElementById('entry-code').value='';document.getElementById('code-entry-screen').classList.add('hidden');
+ if(codeReturnState==='paused'&&state==='paused'&&!cheatsOpen)screens.paused.classList.remove('hidden');
+ codeReturnFocus?.focus?.();
 }
 function redeemEntryCode(value){
  if(typeof value!=='string'||!value.trim())return false;
@@ -3429,7 +3438,7 @@ function initializeSecretEntry(){
  Object.assign(UI.ru,{btnEntryCode:'Ввести код',entryTitle:'Ввести код',entryLabel:'Код',entryApply:'Применить',entryCancel:'Отмена'});
  Object.assign(UI.en,{btnEntryCode:'Enter code',entryTitle:'Enter code',entryLabel:'Code',entryApply:'Apply',entryCancel:'Cancel'});
  for(const [anchor,id]of [['btn-howto','menu-entry-code'],['pause-resume','pause-entry-code']])document.getElementById(anchor).insertAdjacentHTML('beforebegin','<button class="btn secondary entry-code-btn" id="'+id+'" data-i18n="btnEntryCode"></button>');
- document.body.insertAdjacentHTML('beforeend','<div class="overlay hidden" id="code-entry-screen"><section class="panel" role="dialog" aria-modal="true" aria-labelledby="entry-code-title"><h1 class="title" id="entry-code-title" data-i18n="entryTitle"></h1><form id="entry-code-form"><label class="code-label" for="entry-code" data-i18n="entryLabel"></label><input id="entry-code" name="code" type="password" maxlength="64" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="entry-code-error"><p id="entry-code-error" role="status" aria-live="polite"></p><p id="entry-code-training" class="hidden" hidden role="status" aria-live="polite"><span id="entry-code-training-note"></span><a id="entry-code-training-link" target="_blank" rel="noopener noreferrer"></a></p><button class="btn" type="submit" data-i18n="entryApply"></button><button class="btn secondary" type="button" id="entry-code-cancel" data-i18n="entryCancel"></button></form></section></div>');
+ document.body.insertAdjacentHTML('beforeend','<div class="overlay hidden" id="code-entry-screen"><section class="panel" role="dialog" aria-modal="true" aria-labelledby="entry-code-title"><h1 class="title" id="entry-code-title" data-i18n="entryTitle"></h1><form id="entry-code-form"><label class="code-label" for="entry-code" data-i18n="entryLabel"></label><input id="entry-code" name="code" type="password" maxlength="64" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="entry-code-error entry-code-attempts"><p id="entry-code-attempts" role="status" aria-live="polite"></p><p id="entry-code-error" role="status" aria-live="polite"></p><p id="entry-code-training" class="hidden" hidden role="status" aria-live="polite"><span id="entry-code-training-note"></span><a id="entry-code-training-link" target="_blank" rel="noopener noreferrer"></a></p><button class="btn" type="submit" data-i18n="entryApply"></button><button class="btn secondary" type="button" id="entry-code-cancel" data-i18n="entryCancel"></button></form></section></div>');
  for(const id of ['menu-entry-code','pause-entry-code'])document.getElementById(id).onclick=openCodeEntry;
  document.getElementById('entry-code-cancel').onclick=closeCodeEntry;
  document.getElementById('entry-code-form').addEventListener('submit',e=>{e.preventDefault();if(!redeemEntryCode(document.getElementById('entry-code').value)){document.getElementById('entry-code-error').textContent=tr('Код не подошёл.','Code not recognized.');document.getElementById('entry-code').focus();}});
